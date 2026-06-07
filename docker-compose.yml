@@ -19,7 +19,9 @@ services:
   funpay-api:
     build:
       context: ./services/funpay-api
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://funpaybot:funpaybot@db:5432/funpaybot}
     depends_on:
@@ -31,7 +33,9 @@ services:
   telegram-bot:
     build:
       context: ./services/telegram-bot
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://funpaybot:funpaybot@db:5432/funpaybot}
       FUNPAY_API_URL: http://funpay-api:8000
@@ -44,7 +48,9 @@ services:
   web:
     build:
       context: ./apps/web
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://funpaybot:funpaybot@db:5432/funpaybot}
       FUNPAY_API_URL: http://funpay-api:8000
@@ -58,4 +64,3 @@ services:
 
 volumes:
   postgres-data:
-
