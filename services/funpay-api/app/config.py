@@ -7,8 +7,8 @@ class Settings(BaseSettings):
     funpay_base_url: str = "https://funpay.com"
     funpay_category_path: str = "lots/1355/"
     funpay_golden_key: str = ""
+    funpay_user_agent: str | None = None
     funpay_max_actions_per_minute: int = 100
 
 
 settings = Settings()
-

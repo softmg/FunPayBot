@@ -5,7 +5,12 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.funpay_client import funpay_client
+from app.funpay_client import (
+    FunPayNotConfiguredError,
+    FunPayUnsupportedOperationError,
+    exceptions,
+    funpay_client,
+)
 from app.parser import LotSearchFilters, fetch_funpay_warranty, search_lots
 
 app = FastAPI(title="FunPayBot API", version="0.1.0")
@@ -27,9 +32,34 @@ class CreateOrderRequest(BaseModel):
     lot_url: str
 
 
+def map_funpay_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, FunPayNotConfiguredError):
+        return HTTPException(status_code=503, detail=str(exc))
+    if isinstance(exc, FunPayUnsupportedOperationError):
+        return HTTPException(status_code=501, detail=str(exc))
+    if isinstance(exc, exceptions.UnauthorizedError):
+        return HTTPException(status_code=401, detail="FunPay session is unauthorized")
+    if isinstance(exc, exceptions.RequestFailedError):
+        return HTTPException(status_code=502, detail=str(exc))
+    return HTTPException(status_code=502, detail=str(exc))
+
+
 @app.get("/health")
 async def health() -> dict:
     return {"ok": True, "funpay_configured": funpay_client.configured}
+
+
+@app.get("/session")
+async def session_get() -> dict:
+    return await funpay_client.session_status()
+
+
+@app.post("/session/refresh")
+async def session_refresh() -> dict:
+    try:
+        return await funpay_client.refresh_session()
+    except Exception as exc:
+        raise map_funpay_error(exc) from exc
 
 
 @app.post("/lots/search")
@@ -77,14 +107,75 @@ async def lot_warranty(url: str) -> dict:
 
 @app.post("/chats/send")
 async def chats_send(request: SendMessageRequest) -> dict:
-    return await funpay_client.send_message(request.chat_id, request.body)
+    try:
+        return await funpay_client.send_message(request.chat_id, request.body)
+    except Exception as exc:
+        raise map_funpay_error(exc) from exc
 
 
 @app.get("/chats/messages")
-async def chats_messages() -> dict:
-    return {"messages": await funpay_client.fetch_messages()}
+async def chats_messages(chat_id: str | None = None) -> dict:
+    try:
+        return {"messages": await funpay_client.fetch_messages(chat_id)}
+    except Exception as exc:
+        raise map_funpay_error(exc) from exc
+
+
+@app.get("/chats")
+async def chats_list(update: bool = True) -> dict:
+    try:
+        return {"chats": await funpay_client.list_chats(update=update)}
+    except Exception as exc:
+        raise map_funpay_error(exc) from exc
+
+
+@app.get("/chats/{chat_id}")
+async def chats_get(chat_id: int) -> dict:
+    try:
+        return {"chat": await funpay_client.get_chat(chat_id)}
+    except Exception as exc:
+        raise map_funpay_error(exc) from exc
+
+
+@app.get("/chats/{chat_id}/history")
+async def chats_history(
+    chat_id: str,
+    last_message_id: int | None = None,
+    interlocutor_username: str | None = None,
+    from_id: int = 0,
+) -> dict:
+    try:
+        return {
+            "messages": await funpay_client.get_chat_history(
+                chat_id,
+                last_message_id=last_message_id,
+                interlocutor_username=interlocutor_username,
+                from_id=from_id,
+            )
+        }
+    except Exception as exc:
+        raise map_funpay_error(exc) from exc
+
+
+@app.get("/orders/{order_id}")
+async def orders_get(order_id: str) -> dict:
+    try:
+        return {"order": await funpay_client.get_order(order_id)}
+    except Exception as exc:
+        raise map_funpay_error(exc) from exc
+
+
+@app.post("/orders/{order_id}/refund")
+async def orders_refund(order_id: str) -> dict:
+    try:
+        return await funpay_client.refund_order(order_id)
+    except Exception as exc:
+        raise map_funpay_error(exc) from exc
 
 
 @app.post("/orders")
 async def orders_create(request: CreateOrderRequest) -> dict:
-    return await funpay_client.create_order(request.lot_url)
+    try:
+        return await funpay_client.create_order(request.lot_url)
+    except Exception as exc:
+        raise map_funpay_error(exc) from exc
