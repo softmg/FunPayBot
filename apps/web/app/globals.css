@@ -136,3 +136,111 @@ textarea {
   }
 }
 
+.nav-active {
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid #dfe3e8;
+  padding-bottom: 2px;
+}
+
+.tab {
+  align-items: center;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 6px;
+  padding: 10px 16px;
+  color: #596273;
+  font-size: 14px;
+}
+
+.tab:hover {
+  color: #16181d;
+}
+
+.tab-active {
+  border-bottom-color: #186a5b;
+  color: #186a5b;
+  font-weight: 600;
+}
+
+.create-form {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+}
+
+.word-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.word-chip {
+  align-items: center;
+  background: #fef3f2;
+  border: 1px solid #fecdca;
+  border-radius: 999px;
+  color: #b42318;
+  display: inline-flex;
+  font-size: 13px;
+  gap: 4px;
+  padding: 4px 10px;
+}
+
+.chip-delete {
+  background: none;
+  border: none;
+  color: #b42318;
+  cursor: pointer;
+  display: inline-flex;
+  padding: 0;
+}
+
+.settings-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.error-text {
+  color: #b42318;
+  font-size: 14px;
+}
+
+.success-text {
+  color: #186a5b;
+  font-size: 14px;
+}
+
+.status-active {
+  background: #ecfdf3;
+  color: #067647;
+}
+
+.status-blocked {
+  background: #fef3f2;
+  color: #b42318;
+}
+
+.status-replacement_requested {
+  background: #fffaeb;
+  color: #b54708;
+}
+
+.status-refunded {
+  background: #eef1f4;
+  color: #596273;
+}
+

@@ -17,10 +17,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid search payload" }, { status: 400 });
   }
 
+  const dbWords = await query<{ word: string }>("SELECT word FROM forbidden_words");
+  const mergedForbidden = [
+    ...new Set([
+      ...parsed.data.forbidden_words.map((w) => w.toLowerCase()),
+      ...dbWords.map((r) => r.word.toLowerCase()),
+    ]),
+  ];
+
   const response = await fetch(`${process.env.FUNPAY_API_URL}/lots/search`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(parsed.data),
+    body: JSON.stringify({ ...parsed.data, forbidden_words: mergedForbidden }),
     cache: "no-store"
   });
   if (!response.ok) {
@@ -39,3 +47,4 @@ export async function POST(request: Request) {
 
   return NextResponse.json(data);
 }
+

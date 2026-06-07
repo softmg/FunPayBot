@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { query } from "@/lib/db";
+import Nav from "../components/nav";
 
 type AccountRow = {
   id: string;
@@ -32,16 +32,7 @@ export default async function AccountsPage() {
 
   return (
     <div className="shell">
-      <header className="topbar">
-        <div>
-          <strong>FunPayBot</strong>
-          <div className="muted">{user.display_name} · {user.role}</div>
-        </div>
-        <nav className="nav">
-          <Link href="/">Search</Link>
-          <Link href="/accounts">Accounts</Link>
-        </nav>
-      </header>
+      <Nav displayName={user.display_name} role={user.role} />
       <main className="main grid">
         <section>
           <h1>Accounts DB</h1>

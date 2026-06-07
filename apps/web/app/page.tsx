@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { requireUser } from "@/lib/auth";
+import Nav from "./components/nav";
 import SearchPanel from "./search-panel";
 
 export default async function HomePage() {
@@ -7,19 +7,7 @@ export default async function HomePage() {
 
   return (
     <div className="shell">
-      <header className="topbar">
-        <div>
-          <strong>FunPayBot</strong>
-          <div className="muted">{user.display_name} · {user.role}</div>
-        </div>
-        <nav className="nav">
-          <Link href="/">Search</Link>
-          <Link href="/accounts">Accounts</Link>
-          <form action="/api/auth/logout" method="post">
-            <button className="button secondary" type="submit">Sign out</button>
-          </form>
-        </nav>
-      </header>
+      <Nav displayName={user.display_name} role={user.role} />
       <main className="main grid">
         <section>
           <h1>Lot Search</h1>
