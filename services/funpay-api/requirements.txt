@@ -2,6 +2,6 @@ beautifulsoup4==4.12.3
 fastapi==0.115.6
 httpx==0.28.1
 pydantic-settings==2.7.0
+pytest==8.3.4
 python-dotenv==1.0.1
 uvicorn[standard]==0.34.0
-
