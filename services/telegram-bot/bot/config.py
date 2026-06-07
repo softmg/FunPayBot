@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     admin_telegram_ids: str = ""
     database_url: str
     funpay_api_url: str = "http://funpay-api:8000"
-
+    funpay_poll_interval_seconds: int = 20
     @property
     def admin_ids(self) -> set[int]:
         return {
