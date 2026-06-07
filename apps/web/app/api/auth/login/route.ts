@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { sessionCookie } from "@/lib/auth";
 import { query } from "@/lib/db";
+import { signSession } from "@/lib/session";
 
 const schema = z.object({
   email: z.string().email(),
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
   }
 
   const cookieStore = await cookies();
-  cookieStore.set(sessionCookie, user.id, {
+  cookieStore.set(sessionCookie, signSession(user.id), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",

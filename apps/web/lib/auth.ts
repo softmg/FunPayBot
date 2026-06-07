@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { query } from "./db";
+import { verifySession } from "./session";
 
 export type Role = "admin" | "manager";
 
@@ -15,7 +16,12 @@ const sessionCookie = "funpaybot_user";
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const cookieStore = await cookies();
-  const userId = cookieStore.get(sessionCookie)?.value;
+  const token = cookieStore.get(sessionCookie)?.value;
+  if (!token) {
+    return null;
+  }
+
+  const userId = verifySession(token);
   if (!userId) {
     return null;
   }
