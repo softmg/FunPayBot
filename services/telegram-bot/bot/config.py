@@ -6,7 +6,7 @@ class Settings(BaseSettings):
 
     telegram_bot_token: str = ""
     admin_telegram_ids: str = ""
-    database_url: str
+    database_url: str = "postgresql://funpaybot:funpaybot@db:5432/funpaybot"
     funpay_api_url: str = "http://funpay-api:8000"
     funpay_poll_interval_seconds: int = 20
     @property
