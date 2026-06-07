@@ -1,0 +1,41 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { requireUser } from "@/lib/auth";
+import { query } from "@/lib/db";
+
+const schema = z.object({
+  query: z.string().default(""),
+  max_price: z.coerce.number().positive().optional(),
+  min_reviews: z.coerce.number().int().nonnegative().default(0),
+  forbidden_words: z.array(z.string()).default([])
+});
+
+export async function POST(request: Request) {
+  const user = await requireUser();
+  const parsed = schema.safeParse(await request.json());
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid search payload" }, { status: 400 });
+  }
+
+  const response = await fetch(`${process.env.FUNPAY_API_URL}/lots/search`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(parsed.data),
+    cache: "no-store"
+  });
+  if (!response.ok) {
+    return NextResponse.json({ error: await response.text() }, { status: 502 });
+  }
+  const data = await response.json();
+
+  await query(
+    "INSERT INTO lot_searches (user_id, query, max_price, min_reviews, results_count) VALUES ($1, $2, $3, $4, $5)",
+    [user.id, parsed.data.query, parsed.data.max_price ?? null, parsed.data.min_reviews, data.count ?? 0]
+  );
+  await query(
+    "INSERT INTO audit_log (actor_user_id, action, entity_type, metadata) VALUES ($1, 'lot.search', 'lot_search', $2)",
+    [user.id, JSON.stringify({ query: parsed.data.query, results_count: data.count ?? 0 })]
+  );
+
+  return NextResponse.json(data);
+}
