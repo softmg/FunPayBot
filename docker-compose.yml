@@ -1,0 +1,61 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-funpaybot}
+      POSTGRES_USER: ${POSTGRES_USER:-funpaybot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-funpaybot}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./packages/db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-funpaybot} -d ${POSTGRES_DB:-funpaybot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  funpay-api:
+    build:
+      context: ./services/funpay-api
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://funpaybot:funpaybot@db:5432/funpaybot}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  telegram-bot:
+    build:
+      context: ./services/telegram-bot
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://funpaybot:funpaybot@db:5432/funpaybot}
+      FUNPAY_API_URL: http://funpay-api:8000
+    depends_on:
+      db:
+        condition: service_healthy
+      funpay-api:
+        condition: service_started
+
+  web:
+    build:
+      context: ./apps/web
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://funpaybot:funpaybot@db:5432/funpaybot}
+      FUNPAY_API_URL: http://funpay-api:8000
+    depends_on:
+      db:
+        condition: service_healthy
+      funpay-api:
+        condition: service_started
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres-data:
+
