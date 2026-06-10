@@ -1,9 +1,10 @@
 "use client";
 
-import { LoaderCircle, Search, ShoppingCart } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, LoaderCircle, Search, ShoppingCart } from "lucide-react";
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { formatPrice } from "@/lib/format";
+import { type LotSort, type LotSortField, sortLots } from "@/lib/lot-sort";
 
 type Lot = {
   title: string;
@@ -42,12 +43,32 @@ function paymentMethodLabel(method: PaymentMethod) {
   return method.title;
 }
 
+function SortIcon({ active, direction }: { active: boolean; direction: LotSort["direction"] }) {
+  if (!active) {
+    return <ArrowUpDown size={16} />;
+  }
+
+  return direction === "asc" ? <ArrowUp size={16} /> : <ArrowDown size={16} />;
+}
+
 export default function SearchPanel() {
   const [lots, setLots] = useState<Lot[]>([]);
+  const [sort, setSort] = useState<LotSort | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [buyStateByUrl, setBuyStateByUrl] = useState<Record<string, BuyState>>({});
   const [warrantyStateByUrl, setWarrantyStateByUrl] = useState<Record<string, WarrantyState>>({});
+  const sortedLots = useMemo(() => sortLots(lots, sort), [lots, sort]);
+
+  function toggleSort(field: LotSortField) {
+    setSort((current) => {
+      if (current?.field !== field) {
+        return { field, direction: "asc" };
+      }
+
+      return { field, direction: current.direction === "asc" ? "desc" : "asc" };
+    });
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -211,14 +232,38 @@ export default function SearchPanel() {
           <thead>
             <tr>
               <th>Лот</th>
-              <th>Цена</th>
-              <th>Отзывы</th>
+              <th>
+                <button
+                  aria-label={`Сортировать по цене ${
+                    sort?.field === "price" && sort.direction === "asc" ? "по убыванию" : "по возрастанию"
+                  }`}
+                  className={`sort-button${sort?.field === "price" ? " sort-button-active" : ""}`}
+                  onClick={() => toggleSort("price")}
+                  type="button"
+                >
+                  Цена
+                  <SortIcon active={sort?.field === "price"} direction={sort?.direction ?? "asc"} />
+                </button>
+              </th>
+              <th>
+                <button
+                  aria-label={`Сортировать по отзывам ${
+                    sort?.field === "reviews" && sort.direction === "asc" ? "по убыванию" : "по возрастанию"
+                  }`}
+                  className={`sort-button${sort?.field === "reviews" ? " sort-button-active" : ""}`}
+                  onClick={() => toggleSort("reviews")}
+                  type="button"
+                >
+                  Отзывы
+                  <SortIcon active={sort?.field === "reviews"} direction={sort?.direction ?? "asc"} />
+                </button>
+              </th>
               <th>Гарантия</th>
               <th>Действие</th>
             </tr>
           </thead>
           <tbody>
-            {lots.map((lot) => {
+            {sortedLots.map((lot) => {
               const buyState = buyStateByUrl[lot.url];
               const warrantyState = warrantyStateByUrl[lot.url];
 
