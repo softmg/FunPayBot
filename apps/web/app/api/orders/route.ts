@@ -4,7 +4,8 @@ import { requireUser } from "@/lib/auth";
 import { query } from "@/lib/db";
 
 const schema = z.object({
-  lot_url: z.string().url()
+  lot_url: z.string().url(),
+  payment_method_id: z.string().min(1)
 });
 
 function extractError(payload: unknown, fallback: string) {
@@ -101,7 +102,12 @@ export async function POST(request: Request) {
   if (!response.ok) {
     await query(
       "INSERT INTO audit_log (actor_user_id, action, entity_type, metadata) VALUES ($1, 'order.create_failed', 'order', $2)",
-      [user.id, JSON.stringify({ lot_url: parsed.data.lot_url, status: response.status, error: payload })]
+      [user.id, JSON.stringify({
+        lot_url: parsed.data.lot_url,
+        payment_method_id: parsed.data.payment_method_id,
+        status: response.status,
+        error: payload
+      })]
     );
 
     return NextResponse.json(
@@ -117,7 +123,12 @@ export async function POST(request: Request) {
 
   await query(
     "INSERT INTO audit_log (actor_user_id, action, entity_type, entity_id, metadata) VALUES ($1, 'order.create', 'order', $2, $3::jsonb)",
-    [user.id, rows[0].id, JSON.stringify({ lot_url: parsed.data.lot_url, payment_link_present: Boolean(payload?.payment_link) })]
+    [user.id, rows[0].id, JSON.stringify({
+      lot_url: parsed.data.lot_url,
+      payment_method_id: parsed.data.payment_method_id,
+      payment_method: payload?.payment_method ?? null,
+      payment_link_present: Boolean(payload?.payment_link)
+    })]
   );
 
   const telegram = payload?.payment_link

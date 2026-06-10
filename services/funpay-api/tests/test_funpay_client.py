@@ -26,7 +26,7 @@ async def test_create_order_uses_funpay_order_form(monkeypatch) -> None:
 
     monkeypatch.setattr(client, "_ensure_account", fake_ensure_account)
 
-    result = await client.create_order("https://funpay.com/lots/offer?id=68954385")
+    result = await client.create_order("https://funpay.com/lots/offer?id=68954385", "42")
 
     assert result["status"] == "payment_pending"
     assert result["offer_id"] == 68954385
@@ -35,27 +35,56 @@ async def test_create_order_uses_funpay_order_form(monkeypatch) -> None:
     assert calls[1]["payload"]["method"] == "42"
 
 
+@pytest.mark.asyncio
+async def test_list_payment_methods_uses_funpay_order_form(monkeypatch) -> None:
+    client = FunPayClient()
+    calls = []
+
+    async def fake_ensure_account():
+        return FakeAccount(calls)
+
+    monkeypatch.setattr(client, "_ensure_account", fake_ensure_account)
+
+    result = await client.list_payment_methods("https://funpay.com/lots/offer?id=68954385")
+
+    assert result["offer_id"] == 68954385
+    assert result["payment_methods"] == [
+        {"id": "40", "title": "Bank card", "currency": "eur"},
+        {"id": "42", "title": "USDT TRC20", "currency": "usd"},
+    ]
+    assert len(calls) == 1
+
+
 def test_extract_lot_id_from_offer_url() -> None:
     assert extract_lot_id("https://funpay.com/lots/offer?id=123") == 123
 
 
-def test_parse_order_form_prefers_crypto_payment_method() -> None:
+def test_parse_order_form_lists_payment_methods_without_choosing_one() -> None:
     form = parse_order_form(order_form_html(), "https://funpay.com/en/lots/offer?id=68954385")
 
     assert form["action"] == "https://funpay.com/en/orders/new"
     assert form["payload"]["csrf_token"] == "csrf"
     assert form["payload"]["amount"] == "1"
+    assert "method" not in form["payload"]
+    assert form["payment_method"] is None
+    assert form["payment_methods"] == [
+        {"id": "40", "title": "Bank card", "currency": "eur"},
+        {"id": "42", "title": "USDT TRC20", "currency": "usd"},
+    ]
+
+
+def test_parse_order_form_applies_selected_payment_method() -> None:
+    form = parse_order_form(order_form_html(), "https://funpay.com/en/lots/offer?id=68954385", "42")
+
     assert form["payload"]["method"] == "42"
     assert form["payment_method"] == {"id": "42", "title": "USDT TRC20", "currency": "usd"}
 
 
-def test_choose_payment_method_falls_back_to_first_real_method() -> None:
-    form = parse_order_form(
-        order_form_html(options='<option value="7" data-cy="eur">Bank card</option>'),
-        "https://funpay.com/en/lots/offer?id=68954385",
-    )
+def test_parse_order_form_rejects_unavailable_selected_payment_method() -> None:
+    from app.funpay_client import FunPayPurchaseFlowError
 
-    assert form["payload"]["method"] == "7"
+    with pytest.raises(FunPayPurchaseFlowError):
+        parse_order_form(order_form_html(), "https://funpay.com/en/lots/offer?id=68954385", "999")
 
 
 class FakeResponse:

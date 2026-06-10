@@ -17,6 +17,13 @@ type BuyState = {
   pending: boolean;
   message: string;
   ok: boolean;
+  paymentMethods?: PaymentMethod[];
+};
+
+type PaymentMethod = {
+  id: string;
+  title: string;
+  currency?: string | null;
 };
 
 export default function SearchPanel() {
@@ -56,16 +63,40 @@ export default function SearchPanel() {
     setBuyStateByUrl({});
   }
 
-  async function buy(lot: Lot) {
+  async function loadPaymentMethods(lot: Lot) {
     setBuyStateByUrl((current) => ({
       ...current,
-      [lot.url]: { pending: true, message: "", ok: false }
+      [lot.url]: { ...current[lot.url], pending: true, message: "", ok: false }
+    }));
+
+    const response = await fetch("/api/orders/payment-methods", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ lot_url: lot.url })
+    });
+    const data = await response.json().catch(() => ({}));
+
+    setBuyStateByUrl((current) => ({
+      ...current,
+      [lot.url]: {
+        pending: false,
+        message: response.ok ? "Выберите способ оплаты." : data.error ?? "Не удалось получить способы оплаты.",
+        ok: response.ok,
+        paymentMethods: response.ok ? data.payment_methods ?? [] : undefined
+      }
+    }));
+  }
+
+  async function buy(lot: Lot, paymentMethodId: string) {
+    setBuyStateByUrl((current) => ({
+      ...current,
+      [lot.url]: { ...current[lot.url], pending: true, message: "", ok: false }
     }));
 
     const response = await fetch("/api/orders", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ lot_url: lot.url })
+      body: JSON.stringify({ lot_url: lot.url, payment_method_id: paymentMethodId })
     });
     const data = await response.json().catch(() => ({}));
 
@@ -151,12 +182,37 @@ export default function SearchPanel() {
                     <button
                       className="button"
                       disabled={buyState?.pending}
-                      onClick={() => buy(lot)}
+                      onClick={() => loadPaymentMethods(lot)}
                       type="button"
                     >
                       {buyState?.pending ? <LoaderCircle className="spin" size={18} /> : <ShoppingCart size={18} />}
-                      {buyState?.pending ? "Покупаем" : "Купить"}
+                      {buyState?.pending ? "Загружаем" : "Купить"}
                     </button>
+                    {buyState?.paymentMethods?.length ? (
+                      <form
+                        className="grid"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          const formData = new FormData(event.currentTarget);
+                          const paymentMethodId = String(formData.get("payment_method_id") ?? "");
+                          if (paymentMethodId) {
+                            buy(lot, paymentMethodId);
+                          }
+                        }}
+                      >
+                        <select className="input" name="payment_method_id">
+                          {buyState.paymentMethods.map((method) => (
+                            <option key={method.id} value={method.id}>
+                              {method.title}{method.currency ? ` (${method.currency.toUpperCase()})` : ""}
+                            </option>
+                          ))}
+                        </select>
+                        <button className="button" disabled={buyState.pending} type="submit">
+                          {buyState.pending ? <LoaderCircle className="spin" size={18} /> : <ShoppingCart size={18} />}
+                          Отправить ссылку
+                        </button>
+                      </form>
+                    ) : null}
                     {buyState?.message ? (
                       <div className={buyState.ok ? "success-text" : "error-text"}>{buyState.message}</div>
                     ) : null}

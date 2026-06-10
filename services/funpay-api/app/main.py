@@ -33,6 +33,11 @@ class SendMessageRequest(BaseModel):
 
 class CreateOrderRequest(BaseModel):
     lot_url: str
+    payment_method_id: str = Field(min_length=1)
+
+
+class PaymentMethodsRequest(BaseModel):
+    lot_url: str
 
 
 def map_funpay_error(exc: Exception) -> HTTPException:
@@ -181,6 +186,14 @@ async def orders_refund(order_id: str) -> dict:
 @app.post("/orders")
 async def orders_create(request: CreateOrderRequest) -> dict:
     try:
-        return await funpay_client.create_order(request.lot_url)
+        return await funpay_client.create_order(request.lot_url, request.payment_method_id)
+    except Exception as exc:
+        raise map_funpay_error(exc) from exc
+
+
+@app.post("/orders/payment-methods")
+async def order_payment_methods(request: PaymentMethodsRequest) -> dict:
+    try:
+        return await funpay_client.list_payment_methods(request.lot_url)
     except Exception as exc:
         raise map_funpay_error(exc) from exc

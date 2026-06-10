@@ -70,6 +70,26 @@ def test_chats_send_requires_body(mock_client) -> None:
 @patch("app.main.funpay_client")
 def test_orders_create_returns_501(mock_client) -> None:
     from app.funpay_client import FunPayUnsupportedOperationError
+
     mock_client.create_order = AsyncMock(side_effect=FunPayUnsupportedOperationError("not implemented"))
-    response = client.post("/orders", json={"lot_url": "https://funpay.com/lots/1355/1/"})
+    response = client.post(
+        "/orders",
+        json={"lot_url": "https://funpay.com/lots/1355/1/", "payment_method_id": "42"},
+    )
     assert response.status_code == 501
+
+
+@patch("app.main.funpay_client")
+def test_order_payment_methods_returns_results(mock_client) -> None:
+    mock_client.list_payment_methods = AsyncMock(
+        return_value={
+            "lot_url": "https://funpay.com/lots/offer?id=1",
+            "offer_id": 1,
+            "payment_methods": [{"id": "42", "title": "USDT TRC20", "currency": "usd"}],
+        }
+    )
+
+    response = client.post("/orders/payment-methods", json={"lot_url": "https://funpay.com/lots/offer?id=1"})
+
+    assert response.status_code == 200
+    assert response.json()["payment_methods"][0]["id"] == "42"

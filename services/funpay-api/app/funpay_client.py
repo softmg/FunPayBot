@@ -147,12 +147,21 @@ class FunPayClient:
 
         return await self._call_locked(call)
 
-    async def create_order(self, lot_url: str) -> dict:
+    async def list_payment_methods(self, lot_url: str) -> dict:
         account = await self._ensure_account()
         await self.throttle.acquire()
 
         def call() -> dict:
-            return create_order_from_offer(account, lot_url)
+            return list_payment_methods_from_offer(account, lot_url)
+
+        return await self._call_locked(call)
+
+    async def create_order(self, lot_url: str, payment_method_id: str) -> dict:
+        account = await self._ensure_account()
+        await self.throttle.acquire()
+
+        def call() -> dict:
+            return create_order_from_offer(account, lot_url, payment_method_id)
 
         return await self._call_locked(call)
 
@@ -184,18 +193,20 @@ class FunPayClient:
 funpay_client = FunPayClient()
 
 
-def create_order_from_offer(account: Account, lot_url: str) -> dict:
-    lot_id = extract_lot_id(lot_url)
-    response = account.method(
-        "get",
-        f"lots/offer?id={lot_id}",
-        {"accept": "*/*"},
-        {},
-        raise_not_200=True,
-        locale="en",
-    )
+def list_payment_methods_from_offer(account: Account, lot_url: str) -> dict:
+    lot_id, response = fetch_offer_order_page(account, lot_url)
+    form = parse_order_form(response.text, str(response.url))
+    return {
+        "lot_url": lot_url,
+        "offer_id": lot_id,
+        "payment_methods": form["payment_methods"],
+    }
+
+
+def create_order_from_offer(account: Account, lot_url: str, payment_method_id: str) -> dict:
+    lot_id, response = fetch_offer_order_page(account, lot_url)
     offer_page_url = response.url
-    form = parse_order_form(response.text, str(offer_page_url))
+    form = parse_order_form(response.text, str(offer_page_url), payment_method_id)
     post_response = account.method(
         "post",
         form["action"],
@@ -217,6 +228,19 @@ def create_order_from_offer(account: Account, lot_url: str) -> dict:
     }
 
 
+def fetch_offer_order_page(account: Account, lot_url: str) -> tuple[int, Any]:
+    lot_id = extract_lot_id(lot_url)
+    response = account.method(
+        "get",
+        f"lots/offer?id={lot_id}",
+        {"accept": "*/*"},
+        {},
+        raise_not_200=True,
+        locale="en",
+    )
+    return lot_id, response
+
+
 def extract_lot_id(lot_url: str) -> int:
     parsed = urlparse(lot_url)
     query_id = parse_qs(parsed.query).get("id", [None])[0]
@@ -228,7 +252,7 @@ def extract_lot_id(lot_url: str) -> int:
     raise FunPayPurchaseFlowError("Lot URL does not contain a FunPay offer id")
 
 
-def parse_order_form(html: str, page_url: str) -> dict:
+def parse_order_form(html: str, page_url: str, payment_method_id: str | None = None) -> dict:
     soup = BeautifulSoup(html, "html.parser")
     form = soup.find("form", action=re.compile(r"/orders/new\b"))
     if form is None:
@@ -243,16 +267,20 @@ def parse_order_form(html: str, page_url: str) -> dict:
     }
     payload["amount"] = payload.get("amount") or "1"
 
-    method = choose_payment_method(form)
-    payload["method"] = method["id"]
+    methods = extract_payment_methods(form)
+    method = None
+    if payment_method_id is not None:
+        method = find_payment_method(methods, payment_method_id)
+        payload["method"] = method["id"]
     return {
         "action": urljoin(page_url, form["action"]),
         "payload": payload,
+        "payment_methods": methods,
         "payment_method": method,
     }
 
 
-def choose_payment_method(form: Any) -> dict:
+def extract_payment_methods(form: Any) -> list[dict]:
     options = []
     for option in form.select('select[name="method"] option[value]'):
         value = option.get("value", "").strip()
@@ -270,13 +298,14 @@ def choose_payment_method(form: Any) -> dict:
         )
     if not options:
         raise FunPayPurchaseFlowError("FunPay did not offer any payment methods")
+    return [{key: value for key, value in option.items() if key != "label"} for option in options]
 
-    preferred_keywords = ("usdt", "crypto", "cryptocurrency", "tron", "trc20", "erc20")
-    selected = next(
-        (option for option in options if any(keyword in option["label"] for keyword in preferred_keywords)),
-        options[0],
-    )
-    return {key: value for key, value in selected.items() if key != "label"}
+
+def find_payment_method(methods: list[dict], payment_method_id: str) -> dict:
+    selected = next((method for method in methods if method["id"] == payment_method_id), None)
+    if selected is None:
+        raise FunPayPurchaseFlowError("Selected payment method is not available for this lot")
+    return selected
 
 
 def extract_payment_link(response: Any, fallback_url: str) -> str:

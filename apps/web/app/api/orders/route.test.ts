@@ -49,11 +49,14 @@ describe("orders route", () => {
       })
     ) as unknown as typeof fetch;
 
-    const response = await POST(jsonRequest({ lot_url: "https://funpay.com/lots/1355/1/" }));
+    const response = await POST(jsonRequest({ lot_url: "https://funpay.com/lots/1355/1/", payment_method_id: "42" }));
 
     expect(response.status).toBe(501);
     await expect(response.json()).resolves.toEqual({ error: "not implemented" });
-    expect(globalThis.fetch).toHaveBeenCalledWith("http://funpay-api:8000/orders", expect.any(Object));
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://funpay-api:8000/orders",
+      expect.objectContaining({ body: JSON.stringify({ lot_url: "https://funpay.com/lots/1355/1/", payment_method_id: "42" }) })
+    );
     expect(mockedQuery).toHaveBeenCalledWith(
       expect.stringContaining("order.create_failed"),
       expect.arrayContaining(["user-1"])
@@ -70,7 +73,7 @@ describe("orders route", () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
 
-    const response = await POST(jsonRequest({ lot_url: "https://funpay.com/lots/1355/1/" }));
+    const response = await POST(jsonRequest({ lot_url: "https://funpay.com/lots/1355/1/", payment_method_id: "42" }));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
@@ -102,7 +105,7 @@ describe("orders route", () => {
       .mockResolvedValueOnce([{ telegram_user_id: "2002" }])
       .mockResolvedValueOnce([]);
 
-    const response = await POST(jsonRequest({ lot_url: "https://funpay.com/lots/1355/1/" }));
+    const response = await POST(jsonRequest({ lot_url: "https://funpay.com/lots/1355/1/", payment_method_id: "42" }));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ telegram_notified: true });
