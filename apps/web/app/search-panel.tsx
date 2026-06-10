@@ -2,7 +2,7 @@
 
 import { ArrowDown, ArrowUp, ArrowUpDown, LoaderCircle, Search, ShoppingCart } from "lucide-react";
 import type { FormEvent } from "react";
-import { useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { formatPrice } from "@/lib/format";
 import { type LotSort, type LotSortField, sortLots } from "@/lib/lot-sort";
 
@@ -50,6 +50,101 @@ function SortIcon({ active, direction }: { active: boolean; direction: LotSort["
 
   return direction === "asc" ? <ArrowUp size={16} /> : <ArrowDown size={16} />;
 }
+
+type LotRowProps = {
+  lot: Lot;
+  buyState: BuyState | undefined;
+  warrantyState: WarrantyState | undefined;
+  onBuy: (lot: Lot, paymentMethodId: string) => void;
+  onLoadPaymentMethods: (lot: Lot) => void;
+  onLoadWarranty: (lot: Lot) => void;
+};
+
+export function areLotRowPropsEqual(previous: LotRowProps, next: LotRowProps) {
+  return (
+    previous.lot === next.lot &&
+    previous.buyState === next.buyState &&
+    previous.warrantyState === next.warrantyState &&
+    previous.onBuy === next.onBuy &&
+    previous.onLoadPaymentMethods === next.onLoadPaymentMethods &&
+    previous.onLoadWarranty === next.onLoadWarranty
+  );
+}
+
+const LotRow = memo(function LotRow({
+  lot,
+  buyState,
+  warrantyState,
+  onBuy,
+  onLoadPaymentMethods,
+  onLoadWarranty
+}: LotRowProps) {
+  return (
+    <tr>
+      <td><a href={lot.url} rel="noreferrer" target="_blank">{lot.title}</a></td>
+      <td>{formatPrice(lot.price)}</td>
+      <td>{lot.reviews}</td>
+      <td>
+        {lot.warranty ? (
+          lot.warranty
+        ) : (
+          <div className="grid">
+            <span className="muted">Не найдена</span>
+            <button
+              className="button"
+              disabled={warrantyState?.pending}
+              onClick={() => onLoadWarranty(lot)}
+              type="button"
+            >
+              {warrantyState?.pending ? <LoaderCircle className="spin" size={18} /> : <Search size={18} />}
+              {warrantyState?.pending ? "Загружаем" : "Загрузить"}
+            </button>
+            {warrantyState?.error ? <div className="error-text">{warrantyState.error}</div> : null}
+          </div>
+        )}
+      </td>
+      <td>
+        <button
+          className="button"
+          disabled={buyState?.pending}
+          onClick={() => onLoadPaymentMethods(lot)}
+          type="button"
+        >
+          {buyState?.pending ? <LoaderCircle className="spin" size={18} /> : <ShoppingCart size={18} />}
+          {buyState?.pending ? "Загружаем" : "Купить"}
+        </button>
+        {buyState?.paymentMethods?.length ? (
+          <form
+            className="grid"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const formData = new FormData(event.currentTarget);
+              const paymentMethodId = String(formData.get("payment_method_id") ?? "");
+              if (paymentMethodId) {
+                onBuy(lot, paymentMethodId);
+              }
+            }}
+          >
+            <select className="input" name="payment_method_id">
+              {buyState.paymentMethods.map((method) => (
+                <option key={method.id} value={method.id}>
+                  {paymentMethodLabel(method)}
+                </option>
+              ))}
+            </select>
+            <button className="button" disabled={buyState.pending} type="submit">
+              {buyState.pending ? <LoaderCircle className="spin" size={18} /> : <ShoppingCart size={18} />}
+              Отправить ссылку
+            </button>
+          </form>
+        ) : null}
+        {buyState?.message ? (
+          <div className={buyState.ok ? "success-text" : "error-text"}>{buyState.message}</div>
+        ) : null}
+      </td>
+    </tr>
+  );
+}, areLotRowPropsEqual);
 
 export default function SearchPanel() {
   const [lots, setLots] = useState<Lot[]>([]);
@@ -103,7 +198,7 @@ export default function SearchPanel() {
     setWarrantyStateByUrl({});
   }
 
-  async function loadPaymentMethods(lot: Lot) {
+  const loadPaymentMethods = useCallback(async (lot: Lot) => {
     setBuyStateByUrl((current) => ({
       ...current,
       [lot.url]: { ...current[lot.url], pending: true, message: "", ok: false }
@@ -125,9 +220,9 @@ export default function SearchPanel() {
         paymentMethods: response.ok ? data.payment_methods ?? [] : undefined
       }
     }));
-  }
+  }, []);
 
-  async function buy(lot: Lot, paymentMethodId: string) {
+  const buy = useCallback(async (lot: Lot, paymentMethodId: string) => {
     setBuyStateByUrl((current) => ({
       ...current,
       [lot.url]: { ...current[lot.url], pending: true, message: "", ok: false }
@@ -154,9 +249,9 @@ export default function SearchPanel() {
         ok: response.ok
       }
     }));
-  }
+  }, []);
 
-  async function loadWarranty(lot: Lot) {
+  const loadWarranty = useCallback(async (lot: Lot) => {
     setWarrantyStateByUrl((current) => ({
       ...current,
       [lot.url]: { pending: true, error: "" }
@@ -184,7 +279,7 @@ export default function SearchPanel() {
         error: response.ok ? "" : data.error ?? "Не удалось загрузить гарантию."
       }
     }));
-  }
+  }, []);
 
   return (
     <div className="grid">
@@ -264,73 +359,16 @@ export default function SearchPanel() {
           </thead>
           <tbody>
             {sortedLots.map((lot) => {
-              const buyState = buyStateByUrl[lot.url];
-              const warrantyState = warrantyStateByUrl[lot.url];
-
               return (
-                <tr key={lot.url}>
-                  <td><a href={lot.url} rel="noreferrer" target="_blank">{lot.title}</a></td>
-                  <td>{formatPrice(lot.price)}</td>
-                  <td>{lot.reviews}</td>
-                  <td>
-                    {lot.warranty ? (
-                      lot.warranty
-                    ) : (
-                      <div className="grid">
-                        <span className="muted">Не найдена</span>
-                        <button
-                          className="button"
-                          disabled={warrantyState?.pending}
-                          onClick={() => loadWarranty(lot)}
-                          type="button"
-                        >
-                          {warrantyState?.pending ? <LoaderCircle className="spin" size={18} /> : <Search size={18} />}
-                          {warrantyState?.pending ? "Загружаем" : "Загрузить"}
-                        </button>
-                        {warrantyState?.error ? <div className="error-text">{warrantyState.error}</div> : null}
-                      </div>
-                    )}
-                  </td>
-                  <td>
-                    <button
-                      className="button"
-                      disabled={buyState?.pending}
-                      onClick={() => loadPaymentMethods(lot)}
-                      type="button"
-                    >
-                      {buyState?.pending ? <LoaderCircle className="spin" size={18} /> : <ShoppingCart size={18} />}
-                      {buyState?.pending ? "Загружаем" : "Купить"}
-                    </button>
-                    {buyState?.paymentMethods?.length ? (
-                      <form
-                        className="grid"
-                        onSubmit={(event) => {
-                          event.preventDefault();
-                          const formData = new FormData(event.currentTarget);
-                          const paymentMethodId = String(formData.get("payment_method_id") ?? "");
-                          if (paymentMethodId) {
-                            buy(lot, paymentMethodId);
-                          }
-                        }}
-                      >
-                        <select className="input" name="payment_method_id">
-                          {buyState.paymentMethods.map((method) => (
-                            <option key={method.id} value={method.id}>
-                              {paymentMethodLabel(method)}
-                            </option>
-                          ))}
-                        </select>
-                        <button className="button" disabled={buyState.pending} type="submit">
-                          {buyState.pending ? <LoaderCircle className="spin" size={18} /> : <ShoppingCart size={18} />}
-                          Отправить ссылку
-                        </button>
-                      </form>
-                    ) : null}
-                    {buyState?.message ? (
-                      <div className={buyState.ok ? "success-text" : "error-text"}>{buyState.message}</div>
-                    ) : null}
-                  </td>
-                </tr>
+                <LotRow
+                  key={lot.url}
+                  lot={lot}
+                  buyState={buyStateByUrl[lot.url]}
+                  warrantyState={warrantyStateByUrl[lot.url]}
+                  onBuy={buy}
+                  onLoadPaymentMethods={loadPaymentMethods}
+                  onLoadWarranty={loadWarranty}
+                />
               );
             })}
             {lots.length === 0 ? (
