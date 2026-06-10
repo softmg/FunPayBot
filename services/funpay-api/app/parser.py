@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import re
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
@@ -10,6 +11,8 @@ import httpx
 from bs4 import BeautifulSoup
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -35,6 +38,7 @@ PAGE_DESCRIPTION_HEADINGS = {
     "подробное описание",
     "detailed description",
 }
+LOT_DETAILS_CONCURRENCY = 5
 
 
 def parse_price(text: str) -> Decimal | None:
@@ -241,9 +245,23 @@ async def fetch_html(client: httpx.AsyncClient, path: str) -> str:
 
 
 async def fetch_lot_details(client: httpx.AsyncClient, lot_url: str) -> dict[str, str | None]:
-    response = await client.get(lot_url, follow_redirects=True)
-    response.raise_for_status()
+    empty_details = {"short_description": None, "detailed_description": None}
+    try:
+        response = await client.get(lot_url, follow_redirects=True)
+        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        logger.warning("Failed to fetch FunPay lot details for %s: %s", lot_url, exc)
+        return empty_details
     return extract_lot_descriptions(response.text)
+
+
+async def fetch_lot_details_limited(
+    client: httpx.AsyncClient,
+    lot_url: str,
+    semaphore: asyncio.Semaphore,
+) -> dict[str, str | None]:
+    async with semaphore:
+        return await fetch_lot_details(client, lot_url)
 
 
 async def search_lots(filters: LotSearchFilters, scope: SearchScope = "category") -> list[dict]:
@@ -271,7 +289,10 @@ async def search_lots(filters: LotSearchFilters, scope: SearchScope = "category"
         if not lots:
             return []
 
-        details = await asyncio.gather(*(fetch_lot_details(client, lot["url"]) for lot in lots))
+        semaphore = asyncio.Semaphore(LOT_DETAILS_CONCURRENCY)
+        details = await asyncio.gather(
+            *(fetch_lot_details_limited(client, lot["url"], semaphore) for lot in lots)
+        )
         for lot, lot_details in zip(lots, details, strict=True):
             lot["short_description"] = lot_details["short_description"]
             lot["detailed_description"] = lot_details["detailed_description"]

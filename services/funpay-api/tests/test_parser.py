@@ -1,10 +1,14 @@
 from decimal import Decimal
 
+import httpx
+import pytest
+
 from app.parser import (
     LotSearchFilters,
     extract_lot_descriptions,
     extract_warranty,
     extract_warranty_from_texts,
+    fetch_lot_details,
     filters_for_category,
     parse_category_matches,
     parse_category_paths,
@@ -134,3 +138,17 @@ def test_filters_for_category_removes_category_terms_from_lot_query() -> None:
     assert filters.max_price == Decimal("10")
     assert filters.min_reviews == 2
     assert filters.forbidden_words == ("bad",)
+
+
+@pytest.mark.asyncio
+async def test_fetch_lot_details_returns_empty_details_on_429() -> None:
+    request = httpx.Request("GET", "https://funpay.com/lots/offer?id=1")
+    response = httpx.Response(429, request=request)
+
+    class FakeClient:
+        async def get(self, lot_url: str, follow_redirects: bool):
+            raise httpx.HTTPStatusError("Too Many Requests", request=request, response=response)
+
+    details = await fetch_lot_details(FakeClient(), "https://funpay.com/lots/offer?id=1")
+
+    assert details == {"short_description": None, "detailed_description": None}
