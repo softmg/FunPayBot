@@ -1,6 +1,6 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { LoaderCircle, Search } from "lucide-react";
 import { useState } from "react";
 
 type Lot = {
@@ -71,10 +71,17 @@ export default function SearchPanel() {
           <input className="input" name="forbidden_words" placeholder="no warranty, banned" />
         </label>
         <button className="button" disabled={pending} type="submit">
-          <Search size={18} />
+          {pending ? <LoaderCircle className="spin" size={18} /> : <Search size={18} />}
           {pending ? "Searching" : "Search"}
         </button>
       </form>
+
+      {pending ? (
+        <div aria-live="polite" className="search-status">
+          <span className="search-pulse" />
+          Searching FunPay lots
+        </div>
+      ) : null}
 
       {error ? <div className="panel" style={{ color: "#b42318" }}>{error}</div> : null}
 
