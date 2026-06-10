@@ -8,6 +8,7 @@ from app.parser import (
     extract_lot_descriptions,
     extract_warranty,
     extract_warranty_from_texts,
+    fetch_html,
     fetch_lot_details,
     filters_for_category,
     parse_category_matches,
@@ -158,3 +159,28 @@ async def test_fetch_lot_details_returns_empty_details_on_429() -> None:
     details = await fetch_lot_details(FakeClient(), "https://funpay.com/lots/offer?id=1")
 
     assert details == {"short_description": None, "detailed_description": None}
+
+
+@pytest.mark.asyncio
+async def test_fetch_html_retries_timeouts() -> None:
+    class FakeResponse:
+        text = "<html>ok</html>"
+
+        def raise_for_status(self) -> None:
+            return None
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def get(self, url: str, follow_redirects: bool):
+            self.calls += 1
+            if self.calls < 3:
+                raise httpx.ConnectTimeout("timed out")
+            return FakeResponse()
+
+    client = FakeClient()
+    html = await fetch_html(client, "lots/1355/")
+
+    assert html == "<html>ok</html>"
+    assert client.calls == 3

@@ -39,6 +39,7 @@ PAGE_DESCRIPTION_HEADINGS = {
     "detailed description",
 }
 LOT_DETAILS_CONCURRENCY = 5
+FUNPAY_FETCH_ATTEMPTS = 3
 
 
 class FunPayUpstreamTimeoutError(RuntimeError):
@@ -243,12 +244,18 @@ def filters_for_category(filters: LotSearchFilters, category_terms: frozenset[st
 
 async def fetch_html(client: httpx.AsyncClient, path: str) -> str:
     url = urljoin(settings.funpay_base_url, path)
-    try:
-        response = await client.get(url, follow_redirects=True)
-        response.raise_for_status()
-    except httpx.TimeoutException as exc:
-        raise FunPayUpstreamTimeoutError(f"Timed out while fetching FunPay page: {url}") from exc
-    return response.text
+    last_timeout: httpx.TimeoutException | None = None
+    for attempt in range(1, FUNPAY_FETCH_ATTEMPTS + 1):
+        try:
+            response = await client.get(url, follow_redirects=True)
+            response.raise_for_status()
+            return response.text
+        except httpx.TimeoutException as exc:
+            last_timeout = exc
+            logger.warning("Timed out fetching FunPay page %s on attempt %d", url, attempt)
+            if attempt < FUNPAY_FETCH_ATTEMPTS:
+                await asyncio.sleep(0.5 * attempt)
+    raise FunPayUpstreamTimeoutError(f"Timed out while fetching FunPay page after {FUNPAY_FETCH_ATTEMPTS} attempts: {url}") from last_timeout
 
 
 async def fetch_lot_details(client: httpx.AsyncClient, lot_url: str) -> dict[str, str | None]:

@@ -61,7 +61,8 @@ export default function SearchPanel() {
     });
     setPending(false);
     if (!response.ok) {
-      setError("Поиск не удался. Проверьте логи funpay-api и доступ к сети.");
+      const data = await response.json().catch(() => ({}));
+      setError(data.error ?? "Поиск не удался. Проверьте доступ к FunPay.");
       return;
     }
     const data = await response.json();

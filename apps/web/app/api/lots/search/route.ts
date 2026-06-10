@@ -11,6 +11,16 @@ const schema = z.object({
   forbidden_words: z.array(z.string()).default([])
 });
 
+function extractError(payload: unknown, fallback: string) {
+  if (payload && typeof payload === "object" && "detail" in payload && typeof payload.detail === "string") {
+    return payload.detail;
+  }
+  if (payload && typeof payload === "object" && "error" in payload && typeof payload.error === "string") {
+    return payload.error;
+  }
+  return fallback;
+}
+
 export async function POST(request: Request) {
   const user = await requireUser();
   const parsed = schema.safeParse(await request.json());
@@ -32,10 +42,15 @@ export async function POST(request: Request) {
     body: JSON.stringify({ ...parsed.data, forbidden_words: mergedForbidden }),
     cache: "no-store"
   });
+  const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    return NextResponse.json({ error: await response.text() }, { status: 502 });
+    const status = response.status === 504 ? 504 : 502;
+    return NextResponse.json(
+      { error: extractError(payload, "FunPay lot search failed") },
+      { status }
+    );
   }
-  const data = await response.json();
+  const data = payload;
 
   await query(
     "INSERT INTO lot_searches (user_id, query, max_price, min_reviews, results_count) VALUES ($1, $2, $3, $4, $5)",
