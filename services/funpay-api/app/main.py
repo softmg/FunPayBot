@@ -107,9 +107,9 @@ async def lots_search_stream(
 
 
 @app.get("/lots/warranty")
-async def lot_warranty(url: str) -> dict:
+async def lot_warranty(url: str, title: str | None = None) -> dict:
     try:
-        warranty = await fetch_funpay_warranty(url)
+        warranty = await fetch_funpay_warranty(url, title=title)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"url": url, "warranty": warranty}

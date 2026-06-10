@@ -97,6 +97,12 @@ def test_extract_warranty_prefers_detailed_description() -> None:
     assert warranty == "ГАРАНТИЯ ВЕСЬ СРОК 🟢, С подпиской"
 
 
+def test_extract_warranty_falls_back_to_title() -> None:
+    warranty = extract_warranty_from_texts(None, None, "Лот. Гарантия: 12 часов")
+
+    assert warranty == "Гарантия: 12 часов"
+
+
 def test_parse_category_paths_matches_relevant_games() -> None:
     html = """
     <div class="promo-game-item">

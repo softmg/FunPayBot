@@ -48,9 +48,16 @@ def test_lots_search_accepts_site_scope(mock_search: AsyncMock) -> None:
 @patch("app.main.fetch_funpay_warranty", new_callable=AsyncMock)
 def test_warranty_endpoint(mock_warranty: AsyncMock) -> None:
     mock_warranty.return_value = "Гарантия: 24 часа"
-    response = client.get("/lots/warranty", params={"url": "https://funpay.com/lots/1355/1/"})
+    response = client.get(
+        "/lots/warranty",
+        params={"url": "https://funpay.com/lots/1355/1/", "title": "Лот. Гарантия: 24 часа"},
+    )
     assert response.status_code == 200
     assert response.json()["warranty"] == "Гарантия: 24 часа"
+    mock_warranty.assert_awaited_once_with(
+        "https://funpay.com/lots/1355/1/",
+        title="Лот. Гарантия: 24 часа",
+    )
 
 
 @patch("app.main.funpay_client")

@@ -304,7 +304,7 @@ async def search_lots(filters: LotSearchFilters, scope: SearchScope = "category"
         return lots
 
 
-async def fetch_funpay_warranty(lot_url: str) -> str | None:
+async def fetch_funpay_warranty(lot_url: str, title: str | None = None) -> str | None:
     async with httpx.AsyncClient(timeout=20) as client:
         response = await client.get(lot_url, follow_redirects=True)
         response.raise_for_status()
@@ -312,4 +312,5 @@ async def fetch_funpay_warranty(lot_url: str) -> str | None:
     return extract_warranty_from_texts(
         descriptions["detailed_description"],
         descriptions["short_description"],
+        title,
     )

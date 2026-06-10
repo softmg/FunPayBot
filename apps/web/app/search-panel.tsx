@@ -20,6 +20,11 @@ type BuyState = {
   paymentMethods?: PaymentMethod[];
 };
 
+type WarrantyState = {
+  pending: boolean;
+  error: string;
+};
+
 type PaymentMethod = {
   id: string;
   title: string;
@@ -31,6 +36,7 @@ export default function SearchPanel() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [buyStateByUrl, setBuyStateByUrl] = useState<Record<string, BuyState>>({});
+  const [warrantyStateByUrl, setWarrantyStateByUrl] = useState<Record<string, WarrantyState>>({});
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -61,6 +67,7 @@ export default function SearchPanel() {
     const data = await response.json();
     setLots(data.results ?? []);
     setBuyStateByUrl({});
+    setWarrantyStateByUrl({});
   }
 
   async function loadPaymentMethods(lot: Lot) {
@@ -112,6 +119,36 @@ export default function SearchPanel() {
             : "Заказ создан. Ссылка оплаты пока не получена."
           : data.error ?? "Покупка не удалась.",
         ok: response.ok
+      }
+    }));
+  }
+
+  async function loadWarranty(lot: Lot) {
+    setWarrantyStateByUrl((current) => ({
+      ...current,
+      [lot.url]: { pending: true, error: "" }
+    }));
+
+    const response = await fetch("/api/lots/warranty", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url: lot.url, title: lot.title })
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (response.ok) {
+      setLots((current) =>
+        current.map((item) =>
+          item.url === lot.url ? { ...item, warranty: data.warranty ?? null } : item
+        )
+      );
+    }
+
+    setWarrantyStateByUrl((current) => ({
+      ...current,
+      [lot.url]: {
+        pending: false,
+        error: response.ok ? "" : data.error ?? "Не удалось загрузить гарантию."
       }
     }));
   }
@@ -171,13 +208,32 @@ export default function SearchPanel() {
           <tbody>
             {lots.map((lot) => {
               const buyState = buyStateByUrl[lot.url];
+              const warrantyState = warrantyStateByUrl[lot.url];
 
               return (
                 <tr key={lot.url}>
                   <td><a href={lot.url} rel="noreferrer" target="_blank">{lot.title}</a></td>
                   <td>{formatPrice(lot.price)}</td>
                   <td>{lot.reviews}</td>
-                  <td>{lot.warranty ?? <span className="muted">Не найдена</span>}</td>
+                  <td>
+                    {lot.warranty ? (
+                      lot.warranty
+                    ) : (
+                      <div className="grid">
+                        <span className="muted">Не найдена</span>
+                        <button
+                          className="button"
+                          disabled={warrantyState?.pending}
+                          onClick={() => loadWarranty(lot)}
+                          type="button"
+                        >
+                          {warrantyState?.pending ? <LoaderCircle className="spin" size={18} /> : <Search size={18} />}
+                          {warrantyState?.pending ? "Загружаем" : "Загрузить"}
+                        </button>
+                        {warrantyState?.error ? <div className="error-text">{warrantyState.error}</div> : null}
+                      </div>
+                    )}
+                  </td>
                   <td>
                     <button
                       className="button"
