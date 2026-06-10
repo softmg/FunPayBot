@@ -12,9 +12,9 @@ from app.parser import (
 
 def test_parse_lots_applies_filters() -> None:
     html = """
-    <a class="tc-item" href="/lots/1355/1/">Steam account 45 руб. 12 отзывов гарантия: 24 часа</a>
-    <a class="tc-item" href="/lots/1355/2/">Steam blocked 20 руб. 40 отзывов гарантия: 1 час</a>
-    <a class="tc-item" href="/lots/1355/3/">Steam account 90 руб. 1 отзыв гарантия: 24 часа</a>
+    <a class="tc-item" href="/lots/1355/1/"><div class="tc-price" data-s="45"><div>45 руб.</div></div>Steam account 12 отзывов гарантия: 24 часа</a>
+    <a class="tc-item" href="/lots/1355/2/"><div class="tc-price" data-s="20"><div>20 руб.</div></div>Steam blocked 40 отзывов гарантия: 1 час</a>
+    <a class="tc-item" href="/lots/1355/3/"><div class="tc-price" data-s="90"><div>90 руб.</div></div>Steam account 1 отзыв гарантия: 24 часа</a>
     """
 
     lots = parse_lots(
@@ -31,6 +31,21 @@ def test_parse_lots_applies_filters() -> None:
     assert lots[0]["url"].endswith("/lots/1355/1/")
     assert lots[0]["price"] == "45"
     assert lots[0]["reviews"] == 12
+
+
+def test_parse_lots_uses_dedicated_price_block_when_title_contains_numbers() -> None:
+    html = """
+    <a class="tc-item" href="/lots/1355/1/">
+      <div class="tc-price" data-s="1490"><div>1490 ₽</div></div>
+      💎⭐️CHATGPT PLUS 5.5 + CODEX 25 ДНЕЙ⭐️
+      0 отзывов
+    </a>
+    """
+
+    lots = parse_lots(html, LotSearchFilters(query="chatgpt"))
+
+    assert len(lots) == 1
+    assert lots[0]["price"] == "1490"
 
 
 def test_extract_warranty_detects_russian_text() -> None:

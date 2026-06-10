@@ -40,6 +40,25 @@ def parse_price(text: str) -> Decimal | None:
         return None
 
 
+def extract_price(node: BeautifulSoup, text: str) -> Decimal | None:
+    price_node = node.select_one(".tc-price")
+    if price_node is not None:
+        data_s = price_node.get("data-s")
+        if data_s:
+            try:
+                return Decimal(str(data_s))
+            except InvalidOperation:
+                pass
+
+        price_text = normalize_text(price_node.get_text(" "))
+        if price_text:
+            parsed = parse_price(price_text)
+            if parsed is not None:
+                return parsed
+
+    return parse_price(text)
+
+
 def parse_reviews(text: str) -> int:
     match = re.search(r"(\d+)\s*(?:отзыв|review)", text, re.IGNORECASE)
     return int(match.group(1)) if match else 0
@@ -88,7 +107,7 @@ def parse_lots(html: str, filters: LotSearchFilters) -> list[dict]:
         text = normalize_text(node.get_text(" "))
         if not text:
             continue
-        price = parse_price(text)
+        price = extract_price(node, text)
         reviews = parse_reviews(text)
         if not lot_matches(text, filters, price, reviews):
             continue
