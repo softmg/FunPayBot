@@ -9,6 +9,18 @@ const schema = z.object({
   payment_method_id: z.string().min(1)
 });
 
+type PaymentDetails = {
+  type?: string;
+  title?: string;
+  address?: string;
+  amount?: string;
+};
+
+type PaymentNotification = {
+  paymentLink?: string | null;
+  paymentDetails?: PaymentDetails | null;
+};
+
 function extractError(payload: unknown, fallback: string) {
   if (payload && typeof payload === "object" && "detail" in payload && typeof payload.detail === "string") {
     return payload.detail;
@@ -42,19 +54,41 @@ async function getPaymentNotificationRecipients() {
   return [...configuredIds];
 }
 
-async function notifyPaymentLink(paymentLink: string, lotUrl: string, orderId: string) {
+function formatPaymentNotification(payment: PaymentNotification, lotUrl: string, orderId: string) {
+  const lines = [
+    "Новая покупка FunPay ожидает оплаты.",
+    `Заказ: ${orderId}`,
+    `Лот: ${lotUrl}`,
+  ];
+
+  if (payment.paymentLink) {
+    lines.push(`Оплата: ${payment.paymentLink}`);
+    return lines.join("\n");
+  }
+
+  const details = payment.paymentDetails;
+  if (details?.type === "crypto" && details.address && details.amount) {
+    lines.push(
+      "Оплата: крипто-реквизиты FunPay",
+      details.title ? `Метод: ${details.title}` : "Метод: crypto",
+      `Адрес: ${details.address}`,
+      `Сумма: ${details.amount}`
+    );
+    return lines.join("\n");
+  }
+
+  lines.push("Оплата: не удалось получить ссылку или реквизиты");
+  return lines.join("\n");
+}
+
+async function notifyPayment(payment: PaymentNotification, lotUrl: string, orderId: string) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const recipients = await getPaymentNotificationRecipients();
   if (!token || recipients.length === 0) {
     return { notified: false, reason: "telegram_not_configured" };
   }
 
-  const text = [
-    "Новая покупка FunPay ожидает оплаты.",
-    `Заказ: ${orderId}`,
-    `Лот: ${lotUrl}`,
-    `Оплата: ${paymentLink}`
-  ].join("\n");
+  const text = formatPaymentNotification(payment, lotUrl, orderId);
 
   const results = await Promise.all(
     recipients.map(async (chatId) => {
@@ -144,7 +178,12 @@ export async function POST(request: Request) {
 
   const rows = await query<{ id: string }>(
     "INSERT INTO orders (lot_url, status, payment_link, assigned_manager_id, created_by) VALUES ($1, $2, $3, $4, $4) RETURNING id",
-    [parsed.data.lot_url, payload?.payment_link ? "payment_pending" : "created", payload?.payment_link ?? null, user.id]
+    [
+      parsed.data.lot_url,
+      payload?.payment_link || payload?.payment_details ? "payment_pending" : "created",
+      payload?.payment_link ?? null,
+      user.id
+    ]
   );
 
   await query(
@@ -153,13 +192,18 @@ export async function POST(request: Request) {
       lot_url: parsed.data.lot_url,
       payment_method_id: parsed.data.payment_method_id,
       payment_method: payload?.payment_method ?? null,
-      payment_link_present: Boolean(payload?.payment_link)
+      payment_link_present: Boolean(payload?.payment_link),
+      payment_details_present: Boolean(payload?.payment_details)
     })]
   );
 
-  const telegram = payload?.payment_link
-    ? await notifyPaymentLink(payload.payment_link, parsed.data.lot_url, rows[0].id)
-    : { notified: false, reason: "payment_link_missing" };
+  const telegram = payload?.payment_link || payload?.payment_details
+    ? await notifyPayment(
+      { paymentLink: payload.payment_link, paymentDetails: payload.payment_details },
+      parsed.data.lot_url,
+      rows[0].id
+    )
+    : { notified: false, reason: "payment_target_missing" };
 
   await query(
     "INSERT INTO audit_log (actor_user_id, action, entity_type, entity_id, metadata) VALUES ($1, 'order.payment_link_notification', 'order', $2, $3::jsonb)",

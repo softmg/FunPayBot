@@ -3,7 +3,7 @@ import re
 import sys
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urljoin, urlparse
+from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 
 from bs4 import BeautifulSoup
 from app.config import settings
@@ -208,20 +208,29 @@ def create_order_from_offer(account: Account, lot_url: str, payment_method_id: s
     offer_page_url = response.url
     form = parse_order_form(response.text, str(offer_page_url), payment_method_id)
     post_response = submit_order_form(account, form, str(offer_page_url))
+    payment_result = {"payment_link": None, "payment_details": None}
     try:
-        payment_link = extract_payment_link(post_response, str(offer_page_url))
+        payment_result = {"payment_link": extract_payment_link(post_response, str(offer_page_url)), "payment_details": None}
     except FunPayPurchaseFlowError as first_error:
         confirmation_form = parse_order_confirmation_form(post_response.text, str(post_response.url))
-        payment_response = submit_order_form(account, confirmation_form, str(post_response.url))
+        payment_response = submit_order_form(account, confirmation_form, str(post_response.url), ajax=True)
         try:
-            payment_link = extract_payment_link(payment_response, str(post_response.url))
+            payment_result = extract_payment_result(payment_response, str(post_response.url))
         except FunPayPurchaseFlowError as second_error:
             raise FunPayPurchaseFlowError(str(second_error)) from first_error
+        if payment_form := payment_result.get("payment_form"):
+            provider_response = submit_embedded_payment_form(account, payment_form, str(post_response.url))
+            payment_details = extract_crypto_payment_details(provider_response.text)
+            payment_result = {
+                "payment_link": None,
+                "payment_details": payment_details,
+            }
     return {
         "status": "payment_pending",
         "lot_url": lot_url,
         "offer_id": lot_id,
-        "payment_link": payment_link,
+        "payment_link": payment_result.get("payment_link"),
+        "payment_details": payment_result.get("payment_details"),
         "payment_method": form["payment_method"],
     }
 
@@ -250,13 +259,35 @@ def extract_lot_id(lot_url: str) -> int:
     raise FunPayPurchaseFlowError("Lot URL does not contain a FunPay offer id")
 
 
-def submit_order_form(account: Account, form: dict, referer: str) -> Any:
+def submit_order_form(account: Account, form: dict, referer: str, ajax: bool = False) -> Any:
+    headers = {
+        "accept": "*/*",
+        "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "referer": referer,
+    }
+    if ajax:
+        headers.update(
+            {
+                "accept": "application/json, text/javascript, */*; q=0.01",
+                "x-requested-with": "XMLHttpRequest",
+            }
+        )
+    return account.method(
+        "post",
+        form["action"],
+        headers,
+        form["payload"],
+        raise_not_200=True,
+    )
+
+
+def submit_embedded_payment_form(account: Account, form: dict, referer: str) -> Any:
     return account.method(
         "post",
         form["action"],
         {
-            "accept": "*/*",
-            "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "content-type": "application/x-www-form-urlencoded",
             "referer": referer,
         },
         form["payload"],
@@ -410,3 +441,67 @@ def extract_payment_link(response: Any, fallback_url: str) -> str:
         return current_url
 
     raise FunPayPurchaseFlowError("FunPay order was created, but no payment link was found in the response")
+
+
+def extract_payment_result(response: Any, fallback_url: str) -> dict:
+    content_type = response.headers.get("content-type", "")
+    if "application/json" not in content_type:
+        return {"payment_link": extract_payment_link(response, fallback_url)}
+
+    data = response.json()
+    if data.get("error"):
+        detail = data.get("msg") if isinstance(data.get("msg"), str) else None
+        raise FunPayPurchaseFlowError(detail or "FunPay payment form submission failed")
+
+    for key in ("payment_link", "payment_url", "url", "location", "redirect"):
+        value = data.get(key)
+        if isinstance(value, str) and value and is_payment_link(value):
+            return {"payment_link": urljoin(fallback_url, value)}
+
+    form_html = data.get("form")
+    if isinstance(form_html, str) and form_html:
+        return extract_embedded_payment_form_result(form_html, fallback_url)
+
+    raise FunPayPurchaseFlowError("FunPay payment form response did not contain a payment target")
+
+
+def extract_embedded_payment_form_result(html: str, fallback_url: str) -> dict:
+    soup = BeautifulSoup(html, "html.parser")
+    form = soup.find("form")
+    if form is None:
+        raise FunPayPurchaseFlowError("FunPay payment provider form was not found")
+
+    action = urljoin(fallback_url, form.get("action", ""))
+    payload = extract_form_payload(form)
+    method = (form.get("method") or "get").lower()
+    if method == "get":
+        query = urlencode(payload)
+        separator = "&" if urlparse(action).query else "?"
+        return {"payment_link": f"{action}{separator}{query}" if query else action}
+
+    return {
+        "payment_form": {
+            "action": action,
+            "method": method,
+            "payload": payload,
+        }
+    }
+
+
+def extract_crypto_payment_details(html: str) -> dict:
+    soup = BeautifulSoup(html, "html.parser")
+    readonly_values = [
+        node.get("value", "").strip()
+        for node in soup.select('input[readonly][value]')
+        if node.get("value", "").strip()
+    ]
+    if len(readonly_values) < 2:
+        raise FunPayPurchaseFlowError("FunPay crypto payment details were not found")
+
+    title = soup.title.get_text(" ", strip=True).removesuffix(" / FunPay") if soup.title else "Crypto"
+    return {
+        "type": "crypto",
+        "title": title,
+        "address": readonly_values[0],
+        "amount": readonly_values[1],
+    }

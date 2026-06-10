@@ -1,3 +1,4 @@
+import json
 from html import escape
 
 import pytest
@@ -52,14 +53,39 @@ async def test_create_order_submits_confirmation_form(monkeypatch) -> None:
 
     result = await client.create_order("https://funpay.com/lots/offer?id=68954385", "21")
 
-    assert result["payment_link"] == "https://funpay.com/orders/ABCDEF/"
+    assert result["payment_link"] == "https://payment.tome.ge/abc/receipt"
     assert len(calls) == 3
     assert calls[1]["payload"]["method"] == "21"
     assert calls[2]["api_method"] == "https://funpay.com/en/orders/new"
     assert calls[2]["headers"]["referer"] == "https://funpay.com/en/orders/new"
+    assert calls[2]["headers"]["x-requested-with"] == "XMLHttpRequest"
     assert calls[2]["payload"]["gate"] == "31"
     assert calls[2]["payload"]["ba_email"] == ""
     assert "preview" not in calls[2]["payload"]
+
+
+@pytest.mark.asyncio
+async def test_create_order_returns_crypto_payment_details(monkeypatch) -> None:
+    client = FunPayClient()
+    calls = []
+
+    async def fake_ensure_account():
+        return FakeCryptoPaymentAccount(calls)
+
+    monkeypatch.setattr(client, "_ensure_account", fake_ensure_account)
+
+    result = await client.create_order("https://funpay.com/lots/offer?id=68954385", "41")
+
+    assert result["payment_link"] is None
+    assert result["payment_details"] == {
+        "type": "crypto",
+        "title": "USDT TRC20",
+        "address": "TFrKBeDyYV1W3ZeQD4MGjqUr3Lv7sxeFNH",
+        "amount": "1.0075",
+    }
+    assert len(calls) == 4
+    assert calls[3]["api_method"] == "https://funpay.com/en/payments/crypto"
+    assert calls[3]["payload"] == {"payment_id": "156152296"}
 
 
 @pytest.mark.asyncio
@@ -164,6 +190,9 @@ class FakeResponse:
         self.url = url
         self.headers = headers or {}
 
+    def json(self):
+        return json.loads(self.text)
+
 
 class FakeAccount:
     def __init__(self, calls: list) -> None:
@@ -207,7 +236,60 @@ class FakeTwoStepAccount:
             )
         if len(self.calls) == 2:
             return FakeResponse(confirmation_form_html(), url="https://funpay.com/en/orders/new")
-        return FakeResponse(headers={"location": "/orders/ABCDEF/"}, url="https://funpay.com/en/orders/new")
+        return FakeResponse(
+            json.dumps(
+                {
+                    "error": False,
+                    "msg": "",
+                    "errors": [],
+                    "form": '<form method="get" action="https://payment.tome.ge/abc/receipt"></form>',
+                }
+            ),
+            url="https://funpay.com/en/orders/new",
+            headers={"content-type": "application/json; charset=utf-8"},
+        )
+
+
+class FakeCryptoPaymentAccount:
+    def __init__(self, calls: list) -> None:
+        self.calls = calls
+
+    def method(self, request_method, api_method, headers, payload, **kwargs):
+        self.calls.append(
+            {
+                "request_method": request_method,
+                "api_method": api_method,
+                "headers": headers,
+                "payload": payload,
+                "kwargs": kwargs,
+            }
+        )
+        if request_method == "get":
+            return FakeResponse(
+                order_form_html(
+                    '<option value="41" data-cy="usd" data-unit="USDT">USDT TRC20</option>'
+                )
+            )
+        if len(self.calls) == 2:
+            return FakeResponse(confirmation_form_html(method="41"), url="https://funpay.com/en/orders/new")
+        if len(self.calls) == 3:
+            return FakeResponse(
+                json.dumps(
+                    {
+                        "error": False,
+                        "msg": "",
+                        "errors": [],
+                        "form": (
+                            '<form method="post" action="https://funpay.com/en/payments/crypto">'
+                            '<input type="hidden" name="payment_id" value="156152296">'
+                            "</form>"
+                        ),
+                    }
+                ),
+                url="https://funpay.com/en/orders/new",
+                headers={"content-type": "application/json; charset=utf-8"},
+            )
+        return FakeResponse(crypto_payment_html(), url="https://funpay.com/en/payments/crypto")
 
 
 def order_form_html(options: str | None = None) -> str:
@@ -228,12 +310,12 @@ def order_form_html(options: str | None = None) -> str:
     """
 
 
-def confirmation_form_html() -> str:
-    return """
+def confirmation_form_html(method: str = "21") -> str:
+    return f"""
     <form action="" class="margin-top js-form-payment" method="post">
       <input type="hidden" name="csrf_token" value="csrf">
       <input type="hidden" name="type" value="lot">
-      <input type="hidden" name="method" value="21">
+      <input type="hidden" name="method" value="{method}">
       <input type="hidden" name="gate" value="31">
       <input type="hidden" name="offer_id" value="68954385">
       <input type="hidden" name="price_guard" value="guard">
@@ -244,6 +326,18 @@ def confirmation_form_html() -> str:
       <input type="hidden" name="ba_last_name" value="">
       <button type="submit">Pay</button>
     </form>
+    """
+
+
+def crypto_payment_html() -> str:
+    return """
+    <html>
+      <head><title>USDT TRC20 / FunPay</title></head>
+      <body>
+        <input type="text" readonly value="TFrKBeDyYV1W3ZeQD4MGjqUr3Lv7sxeFNH">
+        <input type="text" readonly value="1.0075">
+      </body>
+    </html>
     """
 
 

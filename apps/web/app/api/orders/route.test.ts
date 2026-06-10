@@ -135,6 +135,46 @@ describe("orders route", () => {
     expect(globalThis.fetch).toHaveBeenCalledTimes(3);
   });
 
+  it("sends crypto payment details to Telegram admins", async () => {
+    process.env.TELEGRAM_BOT_TOKEN = "telegram-token";
+    process.env.ADMIN_TELEGRAM_IDS = "1001";
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(Response.json({
+        payment_link: null,
+        payment_details: {
+          type: "crypto",
+          title: "USDT TRC20",
+          address: "TFrKBeDyYV1W3ZeQD4MGjqUr3Lv7sxeFNH",
+          amount: "1.0075"
+        }
+      }, { status: 200 }))
+      .mockResolvedValueOnce(Response.json({ ok: true }, { status: 200 })) as unknown as typeof fetch;
+    mockedQuery
+      .mockResolvedValueOnce([{ id: "order-1" }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const response = await POST(jsonRequest({ lot_url: "https://funpay.com/lots/1355/1/", payment_method_id: "41" }));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ telegram_notified: true });
+    expect(mockedQuery).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("INSERT INTO orders"),
+      ["https://funpay.com/lots/1355/1/", "payment_pending", null, "user-1"]
+    );
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      2,
+      "https://api.telegram.org/bottelegram-token/sendMessage",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining("TFrKBeDyYV1W3ZeQD4MGjqUr3Lv7sxeFNH")
+      })
+    );
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+
   it("returns the created order when Telegram notification times out", async () => {
     process.env.TELEGRAM_BOT_TOKEN = "telegram-token";
     process.env.ADMIN_TELEGRAM_IDS = "1001";
