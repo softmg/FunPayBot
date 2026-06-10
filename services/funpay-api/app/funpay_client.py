@@ -284,21 +284,35 @@ def extract_payment_methods(form: Any) -> list[dict]:
     options = []
     for option in form.select('select[name="method"] option[value]'):
         value = option.get("value", "").strip()
-        title = option.get_text(" ", strip=True)
-        if not value or value == "0" or "hidden" in option.get("class", []):
+        if not value or value == "0":
             continue
+        title, price = extract_payment_method_content(option)
         content = option.get("data-content", "")
-        options.append(
-            {
-                "id": value,
-                "title": title,
-                "currency": option.get("data-cy"),
-                "label": f"{title} {content}".lower(),
-            }
-        )
+        method = {
+            "id": value,
+            "title": title,
+            "currency": option.get("data-cy"),
+            "price": price,
+            "unit": option.get("data-unit"),
+            "label": f"{title} {price or ''} {content}".lower(),
+        }
+        options.append({key: item for key, item in method.items() if item})
     if not options:
         raise FunPayPurchaseFlowError("FunPay did not offer any payment methods")
     return [{key: value for key, value in option.items() if key != "label"} for option in options]
+
+
+def extract_payment_method_content(option: Any) -> tuple[str, str | None]:
+    content = option.get("data-content", "")
+    if not content:
+        return option.get_text(" ", strip=True), None
+
+    soup = BeautifulSoup(content, "html.parser")
+    title_node = soup.select_one(".payment-title")
+    price_node = soup.select_one(".payment-value")
+    title = title_node.get_text(" ", strip=True) if title_node else option.get_text(" ", strip=True)
+    price = price_node.get_text(" ", strip=True) if price_node else None
+    return title, price
 
 
 def find_payment_method(methods: list[dict], payment_method_id: str) -> dict:

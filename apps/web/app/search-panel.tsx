@@ -29,7 +29,18 @@ type PaymentMethod = {
   id: string;
   title: string;
   currency?: string | null;
+  price?: string | null;
 };
+
+function paymentMethodLabel(method: PaymentMethod) {
+  if (method.price) {
+    return `${method.title} - ${method.price}`;
+  }
+  if (method.currency) {
+    return `${method.title} (${method.currency.toUpperCase()})`;
+  }
+  return method.title;
+}
 
 export default function SearchPanel() {
   const [lots, setLots] = useState<Lot[]>([]);
@@ -260,7 +271,7 @@ export default function SearchPanel() {
                         <select className="input" name="payment_method_id">
                           {buyState.paymentMethods.map((method) => (
                             <option key={method.id} value={method.id}>
-                              {method.title}{method.currency ? ` (${method.currency.toUpperCase()})` : ""}
+                              {paymentMethodLabel(method)}
                             </option>
                           ))}
                         </select>

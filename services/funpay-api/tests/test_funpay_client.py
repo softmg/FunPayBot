@@ -1,3 +1,5 @@
+from html import escape
+
 import pytest
 
 from app.funpay_client import (
@@ -80,6 +82,36 @@ def test_parse_order_form_applies_selected_payment_method() -> None:
     assert form["payment_method"] == {"id": "42", "title": "USDT TRC20", "currency": "usd"}
 
 
+def test_parse_order_form_uses_payment_titles_and_prices_from_data_content() -> None:
+    options = """
+      {apple_pay}
+      {google_pay}
+      {bank_card}
+      {sbp}
+    """.format(
+        apple_pay=payment_option_html("41", "Bank card", "Apple Pay", "402.08 $", class_name="hidden"),
+        google_pay=payment_option_html("38", "Bank card", "Google Pay", "402.08 $"),
+        bank_card=payment_option_html("39", "Bank card", "Bank card", "402.08 $"),
+        sbp=payment_option_html(
+            "21",
+            "СБП (оплата по QR)",
+            "СБП (оплата по QR)",
+            "28 334.24 ₽",
+            currency="rub",
+            unit="₽",
+        ),
+    )
+
+    form = parse_order_form(order_form_html(options), "https://funpay.com/en/lots/offer?id=68954385")
+
+    assert form["payment_methods"] == [
+        {"id": "41", "title": "Apple Pay", "currency": "usd", "price": "402.08 $", "unit": "$"},
+        {"id": "38", "title": "Google Pay", "currency": "usd", "price": "402.08 $", "unit": "$"},
+        {"id": "39", "title": "Bank card", "currency": "usd", "price": "402.08 $", "unit": "$"},
+        {"id": "21", "title": "СБП (оплата по QR)", "currency": "rub", "price": "28 334.24 ₽", "unit": "₽"},
+    ]
+
+
 def test_parse_order_form_rejects_unavailable_selected_payment_method() -> None:
     from app.funpay_client import FunPayPurchaseFlowError
 
@@ -129,3 +161,27 @@ def order_form_html(options: str | None = None) -> str:
       </select>
     </form>
     """
+
+
+def payment_option_html(
+    value: str,
+    fallback_title: str,
+    data_title: str,
+    data_price: str,
+    *,
+    currency: str = "usd",
+    unit: str = "$",
+    class_name: str | None = None,
+) -> str:
+    class_attr = f' class="{class_name}"' if class_name else ""
+    data_content = (
+        '<span class="payment">'
+        f'<span class="payment-logo payment-method-{value}"></span>'
+        f'<span class="payment-title">{data_title}</span>'
+        f'<span class="payment-value">{data_price}</span>'
+        "</span>"
+    )
+    return (
+        f'<option value="{value}"{class_attr} data-cy="{currency}" '
+        f'data-unit="{unit}" data-content="{escape(data_content, quote=True)}">{fallback_title}</option>'
+    )
