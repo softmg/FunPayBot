@@ -49,4 +49,27 @@ describe("lots search route", () => {
     expect(response.status).toBe(504);
     await expect(response.json()).resolves.toEqual({ error: "Timed out while fetching FunPay page" });
   });
+
+  it("treats zero max price as no max price filter", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      Response.json({ count: 0, results: [] })
+    ) as unknown as typeof fetch;
+
+    const response = await POST(jsonRequest({
+      query: "chatgpt",
+      max_price: "0",
+      min_reviews: "20",
+      forbidden_words: ["без гарантии", "бан"]
+    }));
+
+    expect(response.status).toBe(200);
+    expect(globalThis.fetch).toHaveBeenCalledOnce();
+    const [, init] = vi.mocked(globalThis.fetch).mock.calls[0];
+    expect(JSON.parse(String(init?.body))).toEqual({
+      query: "chatgpt",
+      search_scope: "category",
+      min_reviews: 20,
+      forbidden_words: ["без гарантии", "бан"]
+    });
+  });
 });

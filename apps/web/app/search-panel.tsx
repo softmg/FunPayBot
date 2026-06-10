@@ -173,6 +173,7 @@ export default function SearchPanel() {
       .split(",")
       .map((word) => word.trim())
       .filter(Boolean);
+    const maxPrice = String(formData.get("max_price") ?? "").trim();
 
     const response = await fetch("/api/lots/search", {
       method: "POST",
@@ -180,7 +181,7 @@ export default function SearchPanel() {
       body: JSON.stringify({
         query: formData.get("query"),
         search_scope: formData.get("search_scope"),
-        max_price: formData.get("max_price") || undefined,
+        max_price: maxPrice && Number(maxPrice) > 0 ? maxPrice : undefined,
         min_reviews: formData.get("min_reviews") || 0,
         forbidden_words: forbidden
       })

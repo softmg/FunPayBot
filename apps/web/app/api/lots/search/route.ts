@@ -6,7 +6,13 @@ import { query } from "@/lib/db";
 const schema = z.object({
   query: z.string().default(""),
   search_scope: z.enum(["category", "site"]).default("category"),
-  max_price: z.coerce.number().positive().optional(),
+  max_price: z.preprocess((value) => {
+    if (value === "" || value === null || value === undefined) {
+      return undefined;
+    }
+
+    return Number(value) === 0 ? undefined : value;
+  }, z.coerce.number().positive().optional()),
   min_reviews: z.coerce.number().int().nonnegative().default(0),
   forbidden_words: z.array(z.string()).default([])
 });
