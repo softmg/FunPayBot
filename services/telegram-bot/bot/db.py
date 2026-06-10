@@ -174,10 +174,10 @@ class Database:
         assert self.pool
         row = await self.pool.fetchrow(
             """
-            SELECT MAX(external_message_id::int) AS max_id
+            SELECT MAX(external_message_id::bigint) AS max_id
             FROM funpay_messages fm
             JOIN funpay_chats fc ON fc.id = fm.chat_id
-            WHERE fc.funpay_chat_id = $1 AND fm.external_message_id IS NOT NULL
+            WHERE fc.funpay_chat_id = $1 AND fm.external_message_id ~ '^[0-9]+$'
             """,
             funpay_chat_id,
         )

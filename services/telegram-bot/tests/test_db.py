@@ -79,6 +79,24 @@ async def test_ensure_chat_upserts() -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_watermark_uses_bigint_message_ids() -> None:
+    """FunPay message IDs can exceed PostgreSQL 32-bit integer range."""
+    from bot.db import Database
+
+    db = Database()
+    db.pool = MagicMock()
+    db.pool.fetchrow = AsyncMock(return_value={"max_id": 4_762_328_683})
+
+    result = await db.get_watermark("fp-chat-123")
+
+    assert result == 4_762_328_683
+    query = db.pool.fetchrow.call_args.args[0]
+    assert "external_message_id::bigint" in query
+    assert "external_message_id::int" not in query
+    assert "external_message_id ~ '^[0-9]+$'" in query
+
+
+@pytest.mark.asyncio
 async def test_assign_chat_to_pending_order_links_chat() -> None:
     """assign_chat_to_pending_order should claim the newest pending order for a new chat."""
     from bot.db import Database
