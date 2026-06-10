@@ -38,7 +38,6 @@ PAGE_DESCRIPTION_HEADINGS = {
     "подробное описание",
     "detailed description",
 }
-LOT_DETAILS_CONCURRENCY = 5
 FUNPAY_FETCH_ATTEMPTS = 3
 
 
@@ -258,26 +257,6 @@ async def fetch_html(client: httpx.AsyncClient, path: str) -> str:
     raise FunPayUpstreamTimeoutError(f"Timed out while fetching FunPay page after {FUNPAY_FETCH_ATTEMPTS} attempts: {url}") from last_timeout
 
 
-async def fetch_lot_details(client: httpx.AsyncClient, lot_url: str) -> dict[str, str | None]:
-    empty_details = {"short_description": None, "detailed_description": None}
-    try:
-        response = await client.get(lot_url, follow_redirects=True)
-        response.raise_for_status()
-    except httpx.HTTPError as exc:
-        logger.warning("Failed to fetch FunPay lot details for %s: %s", lot_url, exc)
-        return empty_details
-    return extract_lot_descriptions(response.text)
-
-
-async def fetch_lot_details_limited(
-    client: httpx.AsyncClient,
-    lot_url: str,
-    semaphore: asyncio.Semaphore,
-) -> dict[str, str | None]:
-    async with semaphore:
-        return await fetch_lot_details(client, lot_url)
-
-
 async def search_lots(filters: LotSearchFilters, scope: SearchScope = "category") -> list[dict]:
     async with httpx.AsyncClient(timeout=20) as client:
         if scope == "category":
@@ -299,22 +278,6 @@ async def search_lots(filters: LotSearchFilters, scope: SearchScope = "category"
                         continue
                     seen.add(lot["url"])
                     lots.append(lot)
-
-        if not lots:
-            return []
-
-        semaphore = asyncio.Semaphore(LOT_DETAILS_CONCURRENCY)
-        details = await asyncio.gather(
-            *(fetch_lot_details_limited(client, lot["url"], semaphore) for lot in lots)
-        )
-        for lot, lot_details in zip(lots, details, strict=True):
-            lot["short_description"] = lot_details["short_description"]
-            lot["detailed_description"] = lot_details["detailed_description"]
-            lot["warranty"] = extract_warranty_from_texts(
-                lot_details["detailed_description"],
-                lot_details["short_description"],
-                lot["warranty"],
-            )
         return lots
 
 

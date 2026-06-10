@@ -9,11 +9,11 @@ from app.parser import (
     extract_warranty,
     extract_warranty_from_texts,
     fetch_html,
-    fetch_lot_details,
     filters_for_category,
     parse_category_matches,
     parse_category_paths,
     parse_lots,
+    search_lots,
 )
 
 
@@ -148,20 +148,6 @@ def test_filters_for_category_removes_category_terms_from_lot_query() -> None:
 
 
 @pytest.mark.asyncio
-async def test_fetch_lot_details_returns_empty_details_on_429() -> None:
-    request = httpx.Request("GET", "https://funpay.com/lots/offer?id=1")
-    response = httpx.Response(429, request=request)
-
-    class FakeClient:
-        async def get(self, lot_url: str, follow_redirects: bool):
-            raise httpx.HTTPStatusError("Too Many Requests", request=request, response=response)
-
-    details = await fetch_lot_details(FakeClient(), "https://funpay.com/lots/offer?id=1")
-
-    assert details == {"short_description": None, "detailed_description": None}
-
-
-@pytest.mark.asyncio
 async def test_fetch_html_retries_timeouts() -> None:
     class FakeResponse:
         text = "<html>ok</html>"
@@ -184,3 +170,50 @@ async def test_fetch_html_retries_timeouts() -> None:
 
     assert html == "<html>ok</html>"
     assert client.calls == 3
+
+
+@pytest.mark.asyncio
+async def test_search_lots_reads_listing_only(monkeypatch) -> None:
+    html = """
+    <a class="tc-item" href="/lots/offer?id=1">
+      <div class="media-user-reviews">12 отзывов</div>
+      <div class="tc-price" data-s="45"><div>45 руб.</div></div>
+      Steam account гарантия: 24 часа
+    </a>
+    """
+
+    class FakeResponse:
+        text = html
+
+        def raise_for_status(self) -> None:
+            return None
+
+    class FakeClient:
+        def __init__(self, timeout: int) -> None:
+            self.calls: list[str] = []
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def get(self, url: str, follow_redirects: bool):
+            self.calls.append(url)
+            return FakeResponse()
+
+    clients: list[FakeClient] = []
+
+    def fake_client_factory(timeout: int):
+        client = FakeClient(timeout)
+        clients.append(client)
+        return client
+
+    monkeypatch.setattr("app.parser.httpx.AsyncClient", fake_client_factory)
+
+    lots = await search_lots(LotSearchFilters(query="steam"))
+
+    assert len(lots) == 1
+    assert lots[0]["warranty"] == "гарантия: 24 часа"
+    assert len(clients[0].calls) == 1
+    assert clients[0].calls[0].endswith("/lots/1355/")
