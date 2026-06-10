@@ -1,6 +1,6 @@
 "use client";
 
-import { LoaderCircle, Search } from "lucide-react";
+import { LoaderCircle, Search, ShoppingCart } from "lucide-react";
 import type { FormEvent } from "react";
 import { useState } from "react";
 
@@ -12,10 +12,17 @@ type Lot = {
   warranty: string | null;
 };
 
+type BuyState = {
+  pending: boolean;
+  message: string;
+  ok: boolean;
+};
+
 export default function SearchPanel() {
   const [lots, setLots] = useState<Lot[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [buyStateByUrl, setBuyStateByUrl] = useState<Record<string, BuyState>>({});
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -45,6 +52,34 @@ export default function SearchPanel() {
     }
     const data = await response.json();
     setLots(data.results ?? []);
+    setBuyStateByUrl({});
+  }
+
+  async function buy(lot: Lot) {
+    setBuyStateByUrl((current) => ({
+      ...current,
+      [lot.url]: { pending: true, message: "", ok: false }
+    }));
+
+    const response = await fetch("/api/orders", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ lot_url: lot.url })
+    });
+    const data = await response.json().catch(() => ({}));
+
+    setBuyStateByUrl((current) => ({
+      ...current,
+      [lot.url]: {
+        pending: false,
+        message: response.ok
+          ? data.payment_link
+            ? `Ссылка оплаты: ${data.payment_link}`
+            : "Заказ создан. Ссылка оплаты пока не получена."
+          : data.error ?? "Покупка не удалась.",
+        ok: response.ok
+      }
+    }));
   }
 
   return (
@@ -96,19 +131,38 @@ export default function SearchPanel() {
               <th>Цена</th>
               <th>Отзывы</th>
               <th>Гарантия</th>
+              <th>Действие</th>
             </tr>
           </thead>
           <tbody>
-            {lots.map((lot) => (
-              <tr key={lot.url}>
-                <td><a href={lot.url} rel="noreferrer" target="_blank">{lot.title}</a></td>
-                <td>{lot.price ?? "Неизвестно"}</td>
-                <td>{lot.reviews}</td>
-                <td>{lot.warranty ?? <span className="muted">Не найдена</span>}</td>
-              </tr>
-            ))}
+            {lots.map((lot) => {
+              const buyState = buyStateByUrl[lot.url];
+
+              return (
+                <tr key={lot.url}>
+                  <td><a href={lot.url} rel="noreferrer" target="_blank">{lot.title}</a></td>
+                  <td>{lot.price ?? "Неизвестно"}</td>
+                  <td>{lot.reviews}</td>
+                  <td>{lot.warranty ?? <span className="muted">Не найдена</span>}</td>
+                  <td>
+                    <button
+                      className="button"
+                      disabled={buyState?.pending}
+                      onClick={() => buy(lot)}
+                      type="button"
+                    >
+                      {buyState?.pending ? <LoaderCircle className="spin" size={18} /> : <ShoppingCart size={18} />}
+                      {buyState?.pending ? "Покупаем" : "Купить"}
+                    </button>
+                    {buyState?.message ? (
+                      <div className={buyState.ok ? "success-text" : "error-text"}>{buyState.message}</div>
+                    ) : null}
+                  </td>
+                </tr>
+              );
+            })}
             {lots.length === 0 ? (
-              <tr><td className="muted" colSpan={4}>Пока нет результатов.</td></tr>
+              <tr><td className="muted" colSpan={5}>Пока нет результатов.</td></tr>
             ) : null}
           </tbody>
         </table>
