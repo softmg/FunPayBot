@@ -1,6 +1,7 @@
 "use client";
 
 import { LoaderCircle, Search } from "lucide-react";
+import type { FormEvent } from "react";
 import { useState } from "react";
 
 type Lot = {
@@ -16,7 +17,9 @@ export default function SearchPanel() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
 
-  async function submit(formData: FormData) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
     setPending(true);
     setError("");
     const forbidden = String(formData.get("forbidden_words") ?? "")
@@ -46,7 +49,7 @@ export default function SearchPanel() {
 
   return (
     <div className="grid">
-      <form action={submit} className="panel search-grid">
+      <form className="panel search-grid" onSubmit={submit}>
         <label className="field">
           <span className="label">Query</span>
           <input className="input" name="query" placeholder="steam, gmail, ..." />
