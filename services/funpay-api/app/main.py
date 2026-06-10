@@ -1,5 +1,6 @@
 import json
 from decimal import Decimal
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -18,6 +19,7 @@ app = FastAPI(title="FunPayBot API", version="0.1.0")
 
 class LotSearchRequest(BaseModel):
     query: str = ""
+    search_scope: Literal["category", "site"] = "category"
     max_price: Decimal | None = None
     min_reviews: int = Field(default=0, ge=0)
     forbidden_words: list[str] = Field(default_factory=list)
@@ -70,7 +72,7 @@ async def lots_search(request: LotSearchRequest) -> dict:
         min_reviews=request.min_reviews,
         forbidden_words=tuple(request.forbidden_words),
     )
-    lots = await search_lots(filters)
+    lots = await search_lots(filters, scope=request.search_scope)
     return {"results": lots, "count": len(lots)}
 
 

@@ -2,8 +2,8 @@ import re
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from html import unescape
-from typing import Iterable
-from urllib.parse import urljoin
+from typing import Iterable, Literal
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -17,6 +17,9 @@ class LotSearchFilters:
     max_price: Decimal | None = None
     min_reviews: int = 0
     forbidden_words: tuple[str, ...] = ()
+
+
+SearchScope = Literal["category", "site"]
 
 
 def parse_price(text: str) -> Decimal | None:
@@ -96,17 +99,63 @@ def parse_lots(html: str, filters: LotSearchFilters) -> list[dict]:
     return lots
 
 
-async def fetch_category_html(client: httpx.AsyncClient) -> str:
-    url = urljoin(settings.funpay_base_url, settings.funpay_category_path)
+def parse_category_paths(html: str, query: str, limit: int = 8) -> list[str]:
+    soup = BeautifulSoup(html, "html.parser")
+    terms = [term for term in query.lower().split() if term]
+    paths: list[str] = []
+    seen: set[str] = set()
+
+    for node in soup.select(".promo-game-item"):
+        text = normalize_text(node.get_text(" ")).lower()
+        if terms and not any(term in text for term in terms):
+            continue
+
+        for link in node.select("a[href*='/lots/']"):
+            href = link.get("href")
+            if not href:
+                continue
+            parsed = urlparse(urljoin(settings.funpay_base_url, href))
+            path = parsed.path.lstrip("/")
+            if path.startswith("en/"):
+                path = path[3:]
+            if path in seen:
+                continue
+            seen.add(path)
+            paths.append(path)
+            if len(paths) >= limit:
+                return paths
+
+    return paths
+
+
+async def fetch_html(client: httpx.AsyncClient, path: str) -> str:
+    url = urljoin(settings.funpay_base_url, path)
     response = await client.get(url, follow_redirects=True)
     response.raise_for_status()
     return response.text
 
 
-async def search_lots(filters: LotSearchFilters) -> list[dict]:
+async def search_lots(filters: LotSearchFilters, scope: SearchScope = "category") -> list[dict]:
     async with httpx.AsyncClient(timeout=20) as client:
-        html = await fetch_category_html(client)
-    return parse_lots(html, filters)
+        if scope == "category":
+            html = await fetch_html(client, settings.funpay_category_path)
+            return parse_lots(html, filters)
+
+        index_html = await fetch_html(client, "en/")
+        category_paths = parse_category_paths(index_html, filters.query)
+        if not category_paths:
+            return []
+
+        lots: list[dict] = []
+        seen: set[str] = set()
+        for path in category_paths:
+            html = await fetch_html(client, path)
+            for lot in parse_lots(html, filters):
+                if lot["url"] in seen:
+                    continue
+                seen.add(lot["url"])
+                lots.append(lot)
+        return lots
 
 
 async def fetch_funpay_warranty(lot_url: str) -> str | None:
@@ -115,4 +164,3 @@ async def fetch_funpay_warranty(lot_url: str) -> str | None:
         response.raise_for_status()
     text = normalize_text(BeautifulSoup(response.text, "html.parser").get_text(" "))
     return extract_warranty(text)
-

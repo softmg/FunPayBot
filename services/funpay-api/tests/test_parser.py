@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from app.parser import LotSearchFilters, extract_warranty, parse_lots
+from app.parser import LotSearchFilters, extract_warranty, parse_category_paths, parse_lots
 
 
 def test_parse_lots_applies_filters() -> None:
@@ -29,3 +29,16 @@ def test_parse_lots_applies_filters() -> None:
 def test_extract_warranty_detects_russian_text() -> None:
     assert extract_warranty("Описание. Гарантия: 24 часа после покупки.") == "Гарантия: 24 часа после покупки"
 
+
+def test_parse_category_paths_matches_relevant_games() -> None:
+    html = """
+    <div class="promo-game-item">
+      <div class="game-title"><a href="https://funpay.com/en/lots/4092/">Gemini</a></div>
+      <ul><li><a href="https://funpay.com/en/lots/4093/">Services</a></li></ul>
+    </div>
+    <div class="promo-game-item">
+      <div class="game-title"><a href="https://funpay.com/en/lots/1355/">ChatGPT</a></div>
+    </div>
+    """
+
+    assert parse_category_paths(html, "Gemini api") == ["lots/4092/", "lots/4093/"]

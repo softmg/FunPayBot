@@ -26,6 +26,7 @@ def test_lots_search_returns_results(mock_search: AsyncMock) -> None:
     data = response.json()
     assert data["count"] == 1
     assert data["results"][0]["title"] == "Test lot"
+    mock_search.assert_awaited_once()
 
 
 @patch("app.main.search_lots", new_callable=AsyncMock)
@@ -34,6 +35,16 @@ def test_lots_search_empty_query(mock_search: AsyncMock) -> None:
     response = client.post("/lots/search", json={})
     assert response.status_code == 200
     assert response.json()["count"] == 0
+
+
+@patch("app.main.search_lots", new_callable=AsyncMock)
+def test_lots_search_accepts_site_scope(mock_search: AsyncMock) -> None:
+    mock_search.return_value = []
+    response = client.post("/lots/search", json={"query": "gemini api", "search_scope": "site"})
+
+    assert response.status_code == 200
+    assert response.json()["count"] == 0
+    assert mock_search.await_args.kwargs["scope"] == "site"
 
 
 @patch("app.main.fetch_funpay_warranty", new_callable=AsyncMock)
