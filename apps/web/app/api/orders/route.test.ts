@@ -37,6 +37,8 @@ describe("orders route", () => {
   afterEach(() => {
     vi.clearAllMocks();
     delete process.env.FUNPAY_API_URL;
+    delete process.env.TELEGRAM_BOT_TOKEN;
+    delete process.env.ADMIN_TELEGRAM_IDS;
   });
 
   it("returns the funpay-api unsupported error when purchase flow is not implemented", async () => {
@@ -64,6 +66,8 @@ describe("orders route", () => {
     ) as unknown as typeof fetch;
     mockedQuery
       .mockResolvedValueOnce([{ id: "order-1" }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
 
     const response = await POST(jsonRequest({ lot_url: "https://funpay.com/lots/1355/1/" }));
@@ -78,5 +82,38 @@ describe("orders route", () => {
       expect.stringContaining("INSERT INTO orders"),
       ["https://funpay.com/lots/1355/1/", "payment_pending", "https://funpay.com/pay/abc", "user-1"]
     );
+    expect(mockedQuery).toHaveBeenNthCalledWith(
+      4,
+      expect.stringContaining("order.payment_link_notification"),
+      expect.arrayContaining(["user-1", "order-1"])
+    );
+  });
+
+  it("sends payment links to Telegram admins", async () => {
+    process.env.TELEGRAM_BOT_TOKEN = "telegram-token";
+    process.env.ADMIN_TELEGRAM_IDS = "1001";
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(Response.json({ payment_link: "https://funpay.com/pay/abc" }, { status: 200 }))
+      .mockResolvedValueOnce(Response.json({ ok: true }, { status: 200 }))
+      .mockResolvedValueOnce(Response.json({ ok: true }, { status: 200 })) as unknown as typeof fetch;
+    mockedQuery
+      .mockResolvedValueOnce([{ id: "order-1" }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ telegram_user_id: "2002" }])
+      .mockResolvedValueOnce([]);
+
+    const response = await POST(jsonRequest({ lot_url: "https://funpay.com/lots/1355/1/" }));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ telegram_notified: true });
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      2,
+      "https://api.telegram.org/bottelegram-token/sendMessage",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining("https://funpay.com/pay/abc")
+      })
+    );
+    expect(globalThis.fetch).toHaveBeenCalledTimes(3);
   });
 });

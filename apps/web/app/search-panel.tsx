@@ -75,7 +75,9 @@ export default function SearchPanel() {
         pending: false,
         message: response.ok
           ? data.payment_link
-            ? `Ссылка оплаты: ${data.payment_link}`
+            ? data.telegram_notified
+              ? "Ссылка оплаты отправлена в Telegram."
+              : `Ссылка оплаты создана, но Telegram не уведомлен: ${data.payment_link}`
             : "Заказ создан. Ссылка оплаты пока не получена."
           : data.error ?? "Покупка не удалась.",
         ok: response.ok

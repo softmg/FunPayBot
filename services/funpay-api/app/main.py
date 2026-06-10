@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.funpay_client import (
     FunPayNotConfiguredError,
+    FunPayPurchaseFlowError,
     FunPayUnsupportedOperationError,
     exceptions,
     funpay_client,
@@ -39,6 +40,8 @@ def map_funpay_error(exc: Exception) -> HTTPException:
         return HTTPException(status_code=503, detail=str(exc))
     if isinstance(exc, FunPayUnsupportedOperationError):
         return HTTPException(status_code=501, detail=str(exc))
+    if isinstance(exc, FunPayPurchaseFlowError):
+        return HTTPException(status_code=502, detail=str(exc))
     if isinstance(exc, exceptions.UnauthorizedError):
         return HTTPException(status_code=401, detail="FunPay session is unauthorized")
     if isinstance(exc, exceptions.RequestFailedError):
