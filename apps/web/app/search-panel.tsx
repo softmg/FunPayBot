@@ -71,7 +71,7 @@ export function areLotRowPropsEqual(previous: LotRowProps, next: LotRowProps) {
   );
 }
 
-const LotRow = memo(function LotRow({
+export const LotRow = memo(function LotRow({
   lot,
   buyState,
   warrantyState,
@@ -91,13 +91,12 @@ const LotRow = memo(function LotRow({
           <div className="grid">
             <span className="muted">Не найдена</span>
             <button
-              className="button"
+              className="text-button warranty-load-button"
               disabled={warrantyState?.pending}
               onClick={() => onLoadWarranty(lot)}
               type="button"
             >
-              {warrantyState?.pending ? <LoaderCircle className="spin" size={18} /> : <Search size={18} />}
-              {warrantyState?.pending ? "Загружаем" : "Загрузить"}
+              {warrantyState?.pending ? "Загружаем..." : "Загрузить"}
             </button>
             {warrantyState?.error ? <div className="error-text">{warrantyState.error}</div> : null}
           </div>

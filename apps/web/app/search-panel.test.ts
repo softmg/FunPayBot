@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { areLotRowPropsEqual } from "./search-panel";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { areLotRowPropsEqual, LotRow } from "./search-panel";
 
 const lot = {
   title: "Test lot",
@@ -40,5 +42,30 @@ describe("lot row memoization", () => {
     };
 
     expect(areLotRowPropsEqual(props, nextProps)).toBe(false);
+  });
+});
+
+describe("lot row warranty control", () => {
+  it("renders warranty loading as a compact text action", () => {
+    const markup = renderToStaticMarkup(
+      createElement(
+        "table",
+        null,
+        createElement(
+          "tbody",
+          null,
+          createElement(LotRow, {
+            lot,
+            buyState: undefined,
+            warrantyState: undefined,
+            ...handlers
+          })
+        )
+      )
+    );
+
+    expect(markup).toContain('class="text-button warranty-load-button"');
+    expect(markup).toContain(">Загрузить</button>");
+    expect(markup).not.toContain('class="button" type="button">Загрузить</button>');
   });
 });
