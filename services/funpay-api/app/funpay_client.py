@@ -324,7 +324,18 @@ def find_payment_method(methods: list[dict], payment_method_id: str) -> dict:
 
 def is_payment_link(value: str) -> bool:
     parsed = urlparse(value)
-    return bool(re.search(r"(^|/)(orders/|pay|payment|checkout)", parsed.path, re.IGNORECASE))
+    segments = [segment for segment in parsed.path.split("/") if segment]
+    if segments and segments[0] in {"en", "ru", "uk"}:
+        segments = segments[1:]
+
+    if not segments:
+        return False
+
+    head = segments[0].lower()
+    if head == "orders":
+        return len(segments) >= 2 and segments[1].lower() not in {"new", "trade"}
+
+    return head in {"pay", "payment", "checkout"} and (len(segments) >= 2 or bool(parsed.query))
 
 
 def extract_payment_link(response: Any, fallback_url: str) -> str:

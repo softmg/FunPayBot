@@ -8,6 +8,7 @@ from app.funpay_client import (
     FunPayClient,
     extract_payment_link,
     extract_lot_id,
+    is_payment_link,
     parse_order_form,
 )
 
@@ -124,6 +125,15 @@ def test_extract_payment_link_rejects_chat_redirect() -> None:
 
     with pytest.raises(FunPayPurchaseFlowError, match="no payment link"):
         extract_payment_link(response, "https://funpay.com/en/lots/offer?id=68954385")
+
+
+@pytest.mark.parametrize("url", ["https://funpay.com/en/orders/", "https://funpay.com/orders/new"])
+def test_is_payment_link_rejects_generic_order_pages(url: str) -> None:
+    assert not is_payment_link(url)
+
+
+def test_is_payment_link_accepts_specific_order_pages() -> None:
+    assert is_payment_link("https://funpay.com/orders/ABCDEF/")
 
 
 class FakeResponse:
