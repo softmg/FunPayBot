@@ -9,6 +9,14 @@ def test_extract_credentials_from_labeled_message() -> None:
     assert extract_credentials("Логин: buyer123\nПароль: secret456") == "buyer123:secret456"
 
 
+def test_extract_credentials_from_funpay_code_site_message() -> None:
+    message = (
+        "САЙТ С КОДОМ: http://45.63.9.253:8080/\n"
+        "ввести: siptqrmuw86489+4913fda6@outlook.com----#C#QrNA6jd7r$eFd"
+    )
+
+    assert extract_credentials(message) == "siptqrmuw86489+4913fda6@outlook.com:#C#QrNA6jd7r$eFd"
+
+
 def test_extract_credentials_returns_none_for_plain_text() -> None:
     assert extract_credentials("hello, when can you deliver?") is None
-

@@ -2,8 +2,11 @@ import asyncio
 import logging
 
 import httpx
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.config import settings
+from bot.credential_confirmations import create_pending_credentials
+from bot.credentials import extract_credentials
 from bot.db import db
 
 logger = logging.getLogger(__name__)
@@ -106,10 +109,21 @@ async def _fetch_and_relay_new_messages(
 
         try:
             formatted = f"💬 *{_escape_md(chat_name or funpay_chat_id)}*\n{_escape_md(author)}: {_escape_md(text)}"
+            reply_markup = None
+            if credentials := extract_credentials(text):
+                token = create_pending_credentials(manager_tg_id, credentials, internal_chat_id)
+                formatted = (
+                    f"{formatted}\n\n"
+                    f"Найдены данные аккаунта:\n`{_escape_md(credentials)}`"
+                )
+                reply_markup = InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("Подтвердить и сохранить", callback_data=f"confirm_credentials:{token}")]]
+                )
             await bot.send_message(
                 chat_id=manager_tg_id,
                 text=formatted,
                 parse_mode="MarkdownV2",
+                reply_markup=reply_markup,
             )
         except Exception:
             logger.exception("Не удалось отправить сообщение менеджеру %d", manager_tg_id)

@@ -13,6 +13,7 @@ from telegram.ext import (
 )
 
 from bot.config import settings
+from bot.credential_confirmations import pop_pending_credentials
 from bot.credentials import extract_credentials
 from bot.db import db
 from bot.poller import poll_funpay_messages
@@ -165,11 +166,23 @@ async def confirm_credentials(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not await db.is_allowed_user(query.from_user.id):
         await query.edit_message_text("Доступ запрещен.")
         return
-    credentials = context.user_data.get("pending_credentials")
+    callback_data = query.data or ""
+    pending = None
+    if callback_data.startswith("confirm_credentials:"):
+        token = callback_data.split(":", 1)[1]
+        pending = pop_pending_credentials(token)
+        if pending is None:
+            await query.edit_message_text("Данные уже подтверждены или устарели.")
+            return
+        if pending.manager_telegram_id != query.from_user.id:
+            await query.edit_message_text("Эти данные назначены другому менеджеру.")
+            return
+
+    credentials = pending.credentials if pending else context.user_data.get("pending_credentials")
     if not credentials:
         await query.edit_message_text("Нет ожидающих подтверждения данных.")
         return
-    chat_id = context.user_data.get("pending_chat_id")
+    chat_id = pending.chat_id if pending else context.user_data.get("pending_chat_id")
     account_id = await db.confirm_account(query.from_user.id, credentials, chat_id)
     context.user_data.pop("pending_credentials", None)
     context.user_data.pop("pending_chat_id", None)
@@ -212,7 +225,7 @@ def main() -> None:
     application.add_handler(CommandHandler("send", send_to_seller))
     application.add_handler(CommandHandler("chats", list_chats))
     application.add_handler(CommandHandler("assign", assign_chat))
-    application.add_handler(CallbackQueryHandler(confirm_credentials, pattern="^confirm_credentials$"))
+    application.add_handler(CallbackQueryHandler(confirm_credentials, pattern=r"^confirm_credentials(:[0-9a-f]+)?$"))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_message))
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
