@@ -53,32 +53,66 @@ function SortIcon({ active, direction }: { active: boolean; direction: LotSort["
 
 type LotRowProps = {
   lot: Lot;
-  buyState: BuyState | undefined;
   warrantyState: WarrantyState | undefined;
-  onBuy: (lot: Lot, paymentMethodId: string) => void;
-  onLoadPaymentMethods: (lot: Lot) => void;
   onLoadWarranty: (lot: Lot) => void;
 };
 
 export function areLotRowPropsEqual(previous: LotRowProps, next: LotRowProps) {
   return (
     previous.lot === next.lot &&
-    previous.buyState === next.buyState &&
     previous.warrantyState === next.warrantyState &&
-    previous.onBuy === next.onBuy &&
-    previous.onLoadPaymentMethods === next.onLoadPaymentMethods &&
     previous.onLoadWarranty === next.onLoadWarranty
   );
 }
 
 export const LotRow = memo(function LotRow({
   lot,
-  buyState,
   warrantyState,
-  onBuy,
-  onLoadPaymentMethods,
   onLoadWarranty
 }: LotRowProps) {
+  const [buyState, setBuyState] = useState<BuyState | undefined>();
+
+  const loadPaymentMethods = useCallback(async () => {
+    setBuyState((current) => ({ ...current, pending: true, message: "", ok: false }));
+
+    const response = await fetch("/api/orders/payment-methods", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ lot_url: lot.url })
+    });
+    const data = await response.json().catch(() => ({}));
+
+    setBuyState({
+      pending: false,
+      message: response.ok ? "Выберите способ оплаты." : data.error ?? "Не удалось получить способы оплаты.",
+      ok: response.ok,
+      paymentMethods: response.ok ? data.payment_methods ?? [] : undefined
+    });
+  }, [lot.url]);
+
+  const buy = useCallback(async (paymentMethodId: string) => {
+    setBuyState((current) => ({ ...current, pending: true, message: "", ok: false }));
+
+    const response = await fetch("/api/orders", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ lot_url: lot.url, payment_method_id: paymentMethodId })
+    });
+    const data = await response.json().catch(() => ({}));
+
+    setBuyState({
+      pending: false,
+      message: response.ok
+        ? data.payment_link
+          ? data.telegram_notified
+            ? "Ссылка оплаты отправлена в Telegram."
+            : `Ссылка оплаты создана, но Telegram не уведомлен: ${data.payment_link}`
+          : "Заказ создан. Ссылка оплаты пока не получена."
+        : data.error ?? "Покупка не удалась.",
+      ok: response.ok
+    });
+  }, [lot.url]);
+
   return (
     <tr>
       <td><a href={lot.url} rel="noreferrer" target="_blank">{lot.title}</a></td>
@@ -106,7 +140,7 @@ export const LotRow = memo(function LotRow({
         <button
           className="button"
           disabled={buyState?.pending}
-          onClick={() => onLoadPaymentMethods(lot)}
+          onClick={loadPaymentMethods}
           type="button"
         >
           {buyState?.pending ? <LoaderCircle className="spin" size={18} /> : <ShoppingCart size={18} />}
@@ -120,7 +154,7 @@ export const LotRow = memo(function LotRow({
               const formData = new FormData(event.currentTarget);
               const paymentMethodId = String(formData.get("payment_method_id") ?? "");
               if (paymentMethodId) {
-                onBuy(lot, paymentMethodId);
+                buy(paymentMethodId);
               }
             }}
           >
@@ -150,7 +184,6 @@ export default function SearchPanel() {
   const [sort, setSort] = useState<LotSort | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
-  const [buyStateByUrl, setBuyStateByUrl] = useState<Record<string, BuyState>>({});
   const [warrantyStateByUrl, setWarrantyStateByUrl] = useState<Record<string, WarrantyState>>({});
   const sortedLots = useMemo(() => sortLots(lots, sort), [lots, sort]);
 
@@ -194,62 +227,8 @@ export default function SearchPanel() {
     }
     const data = await response.json();
     setLots(data.results ?? []);
-    setBuyStateByUrl({});
     setWarrantyStateByUrl({});
   }
-
-  const loadPaymentMethods = useCallback(async (lot: Lot) => {
-    setBuyStateByUrl((current) => ({
-      ...current,
-      [lot.url]: { ...current[lot.url], pending: true, message: "", ok: false }
-    }));
-
-    const response = await fetch("/api/orders/payment-methods", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ lot_url: lot.url })
-    });
-    const data = await response.json().catch(() => ({}));
-
-    setBuyStateByUrl((current) => ({
-      ...current,
-      [lot.url]: {
-        pending: false,
-        message: response.ok ? "Выберите способ оплаты." : data.error ?? "Не удалось получить способы оплаты.",
-        ok: response.ok,
-        paymentMethods: response.ok ? data.payment_methods ?? [] : undefined
-      }
-    }));
-  }, []);
-
-  const buy = useCallback(async (lot: Lot, paymentMethodId: string) => {
-    setBuyStateByUrl((current) => ({
-      ...current,
-      [lot.url]: { ...current[lot.url], pending: true, message: "", ok: false }
-    }));
-
-    const response = await fetch("/api/orders", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ lot_url: lot.url, payment_method_id: paymentMethodId })
-    });
-    const data = await response.json().catch(() => ({}));
-
-    setBuyStateByUrl((current) => ({
-      ...current,
-      [lot.url]: {
-        pending: false,
-        message: response.ok
-          ? data.payment_link
-            ? data.telegram_notified
-              ? "Ссылка оплаты отправлена в Telegram."
-              : `Ссылка оплаты создана, но Telegram не уведомлен: ${data.payment_link}`
-            : "Заказ создан. Ссылка оплаты пока не получена."
-          : data.error ?? "Покупка не удалась.",
-        ok: response.ok
-      }
-    }));
-  }, []);
 
   const loadWarranty = useCallback(async (lot: Lot) => {
     setWarrantyStateByUrl((current) => ({
@@ -363,10 +342,7 @@ export default function SearchPanel() {
                 <LotRow
                   key={lot.url}
                   lot={lot}
-                  buyState={buyStateByUrl[lot.url]}
                   warrantyState={warrantyStateByUrl[lot.url]}
-                  onBuy={buy}
-                  onLoadPaymentMethods={loadPaymentMethods}
                   onLoadWarranty={loadWarranty}
                 />
               );

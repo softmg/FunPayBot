@@ -12,16 +12,13 @@ const lot = {
 };
 
 const handlers = {
-  onBuy: vi.fn(),
-  onLoadPaymentMethods: vi.fn(),
   onLoadWarranty: vi.fn()
 };
 
 describe("lot row memoization", () => {
-  it("keeps rows stable when unrelated purchase state changes", () => {
+  it("keeps rows stable when parent-owned state is unchanged", () => {
     const props = {
       lot,
-      buyState: undefined,
       warrantyState: undefined,
       ...handlers
     };
@@ -29,16 +26,15 @@ describe("lot row memoization", () => {
     expect(areLotRowPropsEqual(props, { ...props })).toBe(true);
   });
 
-  it("rerenders only the row whose purchase state changed", () => {
+  it("rerenders only the row whose parent-owned warranty state changed", () => {
     const props = {
       lot,
-      buyState: undefined,
       warrantyState: undefined,
       ...handlers
     };
     const nextProps = {
       ...props,
-      buyState: { pending: true, message: "", ok: false }
+      warrantyState: { pending: true, error: "" }
     };
 
     expect(areLotRowPropsEqual(props, nextProps)).toBe(false);
@@ -56,7 +52,6 @@ describe("lot row warranty control", () => {
           null,
           createElement(LotRow, {
             lot,
-            buyState: undefined,
             warrantyState: undefined,
             ...handlers
           })
