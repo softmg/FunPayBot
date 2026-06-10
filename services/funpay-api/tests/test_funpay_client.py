@@ -58,6 +58,7 @@ async def test_create_order_submits_confirmation_form(monkeypatch) -> None:
     assert calls[2]["api_method"] == "https://funpay.com/en/orders/new"
     assert calls[2]["headers"]["referer"] == "https://funpay.com/en/orders/new"
     assert calls[2]["payload"]["gate"] == "31"
+    assert calls[2]["payload"]["ba_email"] == ""
     assert "preview" not in calls[2]["payload"]
 
 
@@ -229,7 +230,7 @@ def order_form_html(options: str | None = None) -> str:
 
 def confirmation_form_html() -> str:
     return """
-    <form action="https://funpay.com/en/orders/new" method="post">
+    <form action="" class="margin-top js-form-payment" method="post">
       <input type="hidden" name="csrf_token" value="csrf">
       <input type="hidden" name="type" value="lot">
       <input type="hidden" name="method" value="21">
@@ -238,6 +239,9 @@ def confirmation_form_html() -> str:
       <input type="hidden" name="price_guard" value="guard">
       <input type="text" name="amount" value="1">
       <input type="text" name="player" value="">
+      <input type="hidden" name="ba_email" value="">
+      <input type="hidden" name="ba_first_name" value="">
+      <input type="hidden" name="ba_last_name" value="">
       <button type="submit">Pay</button>
     </form>
     """

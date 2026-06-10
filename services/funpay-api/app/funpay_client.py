@@ -290,7 +290,7 @@ def parse_order_form(html: str, page_url: str, payment_method_id: str | None = N
 
 def parse_order_confirmation_form(html: str, page_url: str) -> dict:
     soup = BeautifulSoup(html, "html.parser")
-    form = soup.find("form", action=re.compile(r"/orders/new\b"))
+    form = find_order_confirmation_form(soup)
     if form is None:
         raise FunPayPurchaseFlowError("FunPay order confirmation form was not found")
 
@@ -303,6 +303,19 @@ def parse_order_confirmation_form(html: str, page_url: str) -> dict:
         "action": urljoin(page_url, form["action"]),
         "payload": payload,
     }
+
+
+def find_order_confirmation_form(soup: BeautifulSoup) -> Any | None:
+    required_fields = {"csrf_token", "type", "method", "gate", "offer_id", "price_guard", "amount"}
+    for form in soup.find_all("form"):
+        classes = form.get("class", [])
+        payload = extract_form_payload(form)
+        if "js-form-payment" in classes and required_fields.issubset(payload):
+            return form
+        action = form.get("action", "")
+        if re.search(r"/orders/new\b", action) and required_fields.issubset(payload):
+            return form
+    return None
 
 
 def extract_form_payload(form: Any) -> dict:
