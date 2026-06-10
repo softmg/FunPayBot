@@ -59,7 +59,13 @@ def extract_price(node: BeautifulSoup, text: str) -> Decimal | None:
     return parse_price(text)
 
 
-def parse_reviews(text: str) -> int:
+def extract_reviews(node: BeautifulSoup, text: str) -> int:
+    reviews_node = node.select_one(".media-user-reviews")
+    if reviews_node is not None:
+        digits = "".join(ch for ch in reviews_node.get_text(" ") if ch.isdigit())
+        if digits:
+            return int(digits)
+
     match = re.search(r"(\d+)\s*(?:отзыв|review)", text, re.IGNORECASE)
     return int(match.group(1)) if match else 0
 
@@ -108,7 +114,7 @@ def parse_lots(html: str, filters: LotSearchFilters) -> list[dict]:
         if not text:
             continue
         price = extract_price(node, text)
-        reviews = parse_reviews(text)
+        reviews = extract_reviews(node, text)
         if not lot_matches(text, filters, price, reviews):
             continue
         seen.add(url)
