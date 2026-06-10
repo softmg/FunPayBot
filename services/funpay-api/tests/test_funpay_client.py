@@ -41,6 +41,27 @@ async def test_create_order_uses_funpay_order_form(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_create_order_submits_confirmation_form(monkeypatch) -> None:
+    client = FunPayClient()
+    calls = []
+
+    async def fake_ensure_account():
+        return FakeTwoStepAccount(calls)
+
+    monkeypatch.setattr(client, "_ensure_account", fake_ensure_account)
+
+    result = await client.create_order("https://funpay.com/lots/offer?id=68954385", "21")
+
+    assert result["payment_link"] == "https://funpay.com/orders/ABCDEF/"
+    assert len(calls) == 3
+    assert calls[1]["payload"]["method"] == "21"
+    assert calls[2]["api_method"] == "https://funpay.com/en/orders/new"
+    assert calls[2]["headers"]["referer"] == "https://funpay.com/en/orders/new"
+    assert calls[2]["payload"]["gate"] == "31"
+    assert "preview" not in calls[2]["payload"]
+
+
+@pytest.mark.asyncio
 async def test_list_payment_methods_uses_funpay_order_form(monkeypatch) -> None:
     client = FunPayClient()
     calls = []
@@ -162,6 +183,32 @@ class FakeAccount:
         return FakeResponse(headers={"location": "/orders/ABCDEF/"})
 
 
+class FakeTwoStepAccount:
+    def __init__(self, calls: list) -> None:
+        self.calls = calls
+
+    def method(self, request_method, api_method, headers, payload, **kwargs):
+        self.calls.append(
+            {
+                "request_method": request_method,
+                "api_method": api_method,
+                "headers": headers,
+                "payload": payload,
+                "kwargs": kwargs,
+            }
+        )
+        if request_method == "get":
+            return FakeResponse(
+                order_form_html(
+                    '<option value="21" data-cy="rub">Faster Payments System</option>'
+                    '<option value="42" data-cy="usd">USDT TRC20</option>'
+                )
+            )
+        if len(self.calls) == 2:
+            return FakeResponse(confirmation_form_html(), url="https://funpay.com/en/orders/new")
+        return FakeResponse(headers={"location": "/orders/ABCDEF/"}, url="https://funpay.com/en/orders/new")
+
+
 def order_form_html(options: str | None = None) -> str:
     return f"""
     <form action="https://funpay.com/en/orders/new" method="post">
@@ -176,6 +223,22 @@ def order_form_html(options: str | None = None) -> str:
         <option value="0" class="hidden">&nbsp;</option>
         {options or '<option value="40" data-cy="eur">Bank card</option><option value="42" data-cy="usd">USDT TRC20</option>'}
       </select>
+    </form>
+    """
+
+
+def confirmation_form_html() -> str:
+    return """
+    <form action="https://funpay.com/en/orders/new" method="post">
+      <input type="hidden" name="csrf_token" value="csrf">
+      <input type="hidden" name="type" value="lot">
+      <input type="hidden" name="method" value="21">
+      <input type="hidden" name="gate" value="31">
+      <input type="hidden" name="offer_id" value="68954385">
+      <input type="hidden" name="price_guard" value="guard">
+      <input type="text" name="amount" value="1">
+      <input type="text" name="player" value="">
+      <button type="submit">Pay</button>
     </form>
     """
 

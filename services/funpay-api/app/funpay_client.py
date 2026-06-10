@@ -207,18 +207,16 @@ def create_order_from_offer(account: Account, lot_url: str, payment_method_id: s
     lot_id, response = fetch_offer_order_page(account, lot_url)
     offer_page_url = response.url
     form = parse_order_form(response.text, str(offer_page_url), payment_method_id)
-    post_response = account.method(
-        "post",
-        form["action"],
-        {
-            "accept": "*/*",
-            "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "referer": str(offer_page_url),
-        },
-        form["payload"],
-        raise_not_200=True,
-    )
-    payment_link = extract_payment_link(post_response, str(offer_page_url))
+    post_response = submit_order_form(account, form, str(offer_page_url))
+    try:
+        payment_link = extract_payment_link(post_response, str(offer_page_url))
+    except FunPayPurchaseFlowError as first_error:
+        confirmation_form = parse_order_confirmation_form(post_response.text, str(post_response.url))
+        payment_response = submit_order_form(account, confirmation_form, str(post_response.url))
+        try:
+            payment_link = extract_payment_link(payment_response, str(post_response.url))
+        except FunPayPurchaseFlowError as second_error:
+            raise FunPayPurchaseFlowError(str(second_error)) from first_error
     return {
         "status": "payment_pending",
         "lot_url": lot_url,
@@ -252,6 +250,20 @@ def extract_lot_id(lot_url: str) -> int:
     raise FunPayPurchaseFlowError("Lot URL does not contain a FunPay offer id")
 
 
+def submit_order_form(account: Account, form: dict, referer: str) -> Any:
+    return account.method(
+        "post",
+        form["action"],
+        {
+            "accept": "*/*",
+            "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "referer": referer,
+        },
+        form["payload"],
+        raise_not_200=True,
+    )
+
+
 def parse_order_form(html: str, page_url: str, payment_method_id: str | None = None) -> dict:
     soup = BeautifulSoup(html, "html.parser")
     form = soup.find("form", action=re.compile(r"/orders/new\b"))
@@ -260,11 +272,7 @@ def parse_order_form(html: str, page_url: str, payment_method_id: str | None = N
         detail = error.get_text(" ", strip=True) if error else "FunPay order form was not found"
         raise FunPayPurchaseFlowError(detail)
 
-    payload = {
-        field["name"]: field.get("value", "")
-        for field in form.find_all("input")
-        if field.get("name") and field.get("name") != "sum"
-    }
+    payload = extract_form_payload(form)
     payload["amount"] = payload.get("amount") or "1"
 
     methods = extract_payment_methods(form)
@@ -277,6 +285,31 @@ def parse_order_form(html: str, page_url: str, payment_method_id: str | None = N
         "payload": payload,
         "payment_methods": methods,
         "payment_method": method,
+    }
+
+
+def parse_order_confirmation_form(html: str, page_url: str) -> dict:
+    soup = BeautifulSoup(html, "html.parser")
+    form = soup.find("form", action=re.compile(r"/orders/new\b"))
+    if form is None:
+        raise FunPayPurchaseFlowError("FunPay order confirmation form was not found")
+
+    payload = extract_form_payload(form)
+    required_fields = {"csrf_token", "type", "method", "gate", "offer_id", "price_guard", "amount"}
+    if not required_fields.issubset(payload):
+        raise FunPayPurchaseFlowError("FunPay order confirmation form is incomplete")
+
+    return {
+        "action": urljoin(page_url, form["action"]),
+        "payload": payload,
+    }
+
+
+def extract_form_payload(form: Any) -> dict:
+    return {
+        field["name"]: field.get("value", "")
+        for field in form.find_all("input")
+        if field.get("name") and field.get("name") != "sum"
     }
 
 
