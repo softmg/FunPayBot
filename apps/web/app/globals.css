@@ -15,6 +15,7 @@ a {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -60,7 +61,7 @@ textarea {
 .search-grid {
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(240px, 2fr) minmax(120px, 1fr) minmax(120px, 1fr) minmax(180px, 1fr) auto;
+  grid-template-columns: minmax(220px, 2fr) minmax(150px, 1fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(170px, 1fr) auto;
 }
 
 .field {
@@ -243,4 +244,3 @@ textarea {
   background: #eef1f4;
   color: #596273;
 }
-

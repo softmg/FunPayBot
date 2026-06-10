@@ -5,6 +5,7 @@ import { query } from "@/lib/db";
 
 const schema = z.object({
   query: z.string().default(""),
+  search_scope: z.enum(["category", "site"]).default("category"),
   max_price: z.coerce.number().positive().optional(),
   min_reviews: z.coerce.number().int().nonnegative().default(0),
   forbidden_words: z.array(z.string()).default([])
@@ -42,9 +43,8 @@ export async function POST(request: Request) {
   );
   await query(
     "INSERT INTO audit_log (actor_user_id, action, entity_type, metadata) VALUES ($1, 'lot.search', 'lot_search', $2)",
-    [user.id, JSON.stringify({ query: parsed.data.query, results_count: data.count ?? 0 })]
+    [user.id, JSON.stringify({ query: parsed.data.query, search_scope: parsed.data.search_scope, results_count: data.count ?? 0 })]
   );
 
   return NextResponse.json(data);
 }
-

@@ -11,11 +11,10 @@ export default async function HomePage() {
       <main className="main grid">
         <section>
           <h1>Lot Search</h1>
-          <p className="muted">Fixed category: lots/1355. Results are filtered before a manager starts the Telegram buy loop.</p>
+          <p className="muted">Search in the configured category or discover matching FunPay categories across the site before filtering lots.</p>
         </section>
         <SearchPanel />
       </main>
     </div>
   );
 }
-

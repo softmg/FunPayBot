@@ -29,6 +29,7 @@ export default function SearchPanel() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         query: formData.get("query"),
+        search_scope: formData.get("search_scope"),
         max_price: formData.get("max_price") || undefined,
         min_reviews: formData.get("min_reviews") || 0,
         forbidden_words: forbidden
@@ -49,6 +50,13 @@ export default function SearchPanel() {
         <label className="field">
           <span className="label">Query</span>
           <input className="input" name="query" placeholder="steam, gmail, ..." />
+        </label>
+        <label className="field">
+          <span className="label">Search scope</span>
+          <select className="input" defaultValue="category" name="search_scope">
+            <option value="category">Current category</option>
+            <option value="site">Whole site</option>
+          </select>
         </label>
         <label className="field">
           <span className="label">Max price</span>
@@ -98,4 +106,3 @@ export default function SearchPanel() {
     </div>
   );
 }
-
