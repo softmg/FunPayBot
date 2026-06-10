@@ -76,3 +76,52 @@ async def test_ensure_chat_upserts() -> None:
 
     result = await db.ensure_chat("fp-chat-123", "seller_name")
     assert result == "internal-uuid"
+
+
+@pytest.mark.asyncio
+async def test_assign_chat_to_pending_order_links_chat() -> None:
+    """assign_chat_to_pending_order should claim the newest pending order for a new chat."""
+    from bot.db import Database
+
+    class AsyncContext:
+        def __init__(self, value=None) -> None:
+            self.value = value
+
+        async def __aenter__(self):
+            return self.value
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    connection = MagicMock()
+    connection.fetchrow = AsyncMock(
+        return_value={
+            "id": "order-uuid",
+            "assigned_manager_id": "manager-uuid",
+            "telegram_user_id": 12345,
+        }
+    )
+    connection.execute = AsyncMock()
+    connection.transaction.return_value = AsyncContext()
+
+    pool = MagicMock()
+    pool.acquire.return_value = AsyncContext(connection)
+
+    db = Database()
+    db.pool = pool
+
+    result = await db.assign_chat_to_pending_order("fp-chat-123", "chat-uuid")
+
+    assert result == 12345
+    assert connection.execute.call_count == 3
+    connection.execute.assert_any_call(
+        """
+                    UPDATE orders
+                    SET chat_id = $2,
+                        status = CASE WHEN status = 'payment_pending' THEN 'paid' ELSE status END,
+                        updated_at = now()
+                    WHERE id = $1
+                    """,
+        "order-uuid",
+        "chat-uuid",
+    )

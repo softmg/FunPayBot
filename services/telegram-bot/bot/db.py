@@ -84,6 +84,63 @@ class Database:
         )
         return str(row["id"])
 
+    async def assign_chat_to_pending_order(self, funpay_chat_id: str, internal_chat_id: str) -> int | None:
+        """Attach a new FunPay chat to the newest pending order and return manager Telegram ID."""
+        assert self.pool
+        async with self.pool.acquire() as connection:
+            async with connection.transaction():
+                order = await connection.fetchrow(
+                    """
+                    SELECT orders.id, orders.assigned_manager_id, users.telegram_user_id
+                    FROM orders
+                    JOIN users ON users.id = orders.assigned_manager_id
+                    WHERE orders.chat_id IS NULL
+                      AND orders.status IN ('created', 'payment_pending', 'paid', 'credentials_pending')
+                      AND orders.created_at >= now() - interval '24 hours'
+                      AND users.is_active = TRUE
+                      AND users.telegram_user_id IS NOT NULL
+                    ORDER BY orders.created_at DESC
+                    LIMIT 1
+                    FOR UPDATE OF orders SKIP LOCKED
+                    """
+                )
+                if not order:
+                    return None
+
+                await connection.execute(
+                    """
+                    UPDATE funpay_chats
+                    SET assigned_manager_id = $2,
+                        chat_url = COALESCE(chat_url, $3),
+                        updated_at = now()
+                    WHERE id = $1
+                    """,
+                    internal_chat_id,
+                    order["assigned_manager_id"],
+                    f"https://funpay.com/en/chat/?node={funpay_chat_id}",
+                )
+                await connection.execute(
+                    """
+                    UPDATE orders
+                    SET chat_id = $2,
+                        status = CASE WHEN status = 'payment_pending' THEN 'paid' ELSE status END,
+                        updated_at = now()
+                    WHERE id = $1
+                    """,
+                    order["id"],
+                    internal_chat_id,
+                )
+                await connection.execute(
+                    """
+                    INSERT INTO audit_log (actor_user_id, action, entity_type, entity_id, metadata)
+                    VALUES ($1, 'order.chat_auto_assigned', 'order', $2, $3::jsonb)
+                    """,
+                    order["assigned_manager_id"],
+                    order["id"],
+                    json.dumps({"funpay_chat_id": funpay_chat_id}),
+                )
+                return order["telegram_user_id"]
+
     async def assign_chat(self, funpay_chat_id: str, manager_user_id: str) -> None:
         """Assign a FunPay chat to a manager."""
         assert self.pool
@@ -163,4 +220,3 @@ class Database:
 
 
 db = Database()
-

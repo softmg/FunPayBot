@@ -48,10 +48,13 @@ async def _poll_once(bot) -> None:
             continue
 
         funpay_chat_id = str(chat_id)
+        internal_chat_id = await db.ensure_chat(funpay_chat_id, chat_name)
 
         manager_tg_id = await db.get_manager_telegram_id_for_chat(funpay_chat_id)
         if manager_tg_id is None:
-            continue
+            manager_tg_id = await db.assign_chat_to_pending_order(funpay_chat_id, internal_chat_id)
+            if manager_tg_id is None:
+                continue
 
         watermark = await db.get_watermark(funpay_chat_id)
         node_msg_id = chat.get("node_msg_id")
@@ -59,11 +62,12 @@ async def _poll_once(bot) -> None:
         if watermark is not None and node_msg_id is not None and int(node_msg_id) <= watermark:
             continue
 
-        await _fetch_and_relay_new_messages(bot, funpay_chat_id, chat_name, manager_tg_id, watermark)
+        await _fetch_and_relay_new_messages(bot, internal_chat_id, funpay_chat_id, chat_name, manager_tg_id, watermark)
 
 
 async def _fetch_and_relay_new_messages(
     bot,
+    internal_chat_id: str,
     funpay_chat_id: str,
     chat_name: str | None,
     manager_tg_id: int,
@@ -86,7 +90,6 @@ async def _fetch_and_relay_new_messages(
         return
 
     messages = response.json().get("messages", [])
-    internal_chat_id = await db.ensure_chat(funpay_chat_id, chat_name)
 
     for msg in messages:
         msg_id = msg.get("id")
