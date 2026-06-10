@@ -10,8 +10,8 @@ export default async function AdminPage() {
       <Nav displayName={user.display_name} role={user.role} />
       <main className="main grid">
         <section>
-          <h1>Administration</h1>
-          <p className="muted">Manage users, forbidden words, and system settings.</p>
+          <h1>Администрирование</h1>
+          <p className="muted">Управление пользователями, запрещёнными словами и системными настройками.</p>
         </section>
         <AdminPanel />
       </main>

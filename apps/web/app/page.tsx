@@ -10,8 +10,8 @@ export default async function HomePage() {
       <Nav displayName={user.display_name} role={user.role} />
       <main className="main grid">
         <section>
-          <h1>Lot Search</h1>
-          <p className="muted">Search in the configured category or discover matching FunPay categories across the site before filtering lots.</p>
+          <h1>Поиск лотов</h1>
+          <p className="muted">Ищите в настроенной категории или подбирайте подходящие категории FunPay по всему сайту перед фильтрацией лотов.</p>
         </section>
         <SearchPanel />
       </main>

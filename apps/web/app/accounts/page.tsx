@@ -36,12 +36,11 @@ export default async function AccountsPage() {
       <Nav displayName={user.display_name} role={user.role} />
       <main className="main grid">
         <section>
-          <h1>Accounts DB</h1>
-          <p className="muted">Confirmed credentials with FunPay chat context and refund status.</p>
+          <h1>База аккаунтов</h1>
+          <p className="muted">Подтверждённые данные аккаунтов, связанные чаты FunPay и статусы возврата.</p>
         </section>
         <AccountsTable initialAccounts={accounts} />
       </main>
     </div>
   );
 }
-

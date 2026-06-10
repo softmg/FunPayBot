@@ -19,7 +19,7 @@ export default function LoginForm() {
     });
     setPending(false);
     if (!response.ok) {
-      setError("Invalid email or password.");
+      setError("Неверный email или пароль.");
       return;
     }
     window.location.href = "/";
@@ -28,18 +28,17 @@ export default function LoginForm() {
   return (
     <form action={submit} className="grid">
       <label className="field">
-        <span className="label">Email</span>
+        <span className="label">Почта</span>
         <input className="input" name="email" type="email" required />
       </label>
       <label className="field">
-        <span className="label">Password</span>
+        <span className="label">Пароль</span>
         <input className="input" name="password" type="password" required />
       </label>
       {error ? <p style={{ color: "#b42318" }}>{error}</p> : null}
       <button className="button" disabled={pending} type="submit">
-        {pending ? "Signing in" : "Sign in"}
+        {pending ? "Входим" : "Войти"}
       </button>
     </form>
   );
 }
-

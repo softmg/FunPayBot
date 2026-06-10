@@ -40,7 +40,7 @@ export default function SearchPanel() {
     });
     setPending(false);
     if (!response.ok) {
-      setError("Search failed. Check funpay-api logs and network access.");
+      setError("Поиск не удался. Проверьте логи funpay-api и доступ к сети.");
       return;
     }
     const data = await response.json();
@@ -51,38 +51,38 @@ export default function SearchPanel() {
     <div className="grid">
       <form className="panel search-grid" onSubmit={submit}>
         <label className="field">
-          <span className="label">Query</span>
+          <span className="label">Запрос</span>
           <input className="input" name="query" placeholder="steam, gmail, ..." />
         </label>
         <label className="field">
-          <span className="label">Search scope</span>
+          <span className="label">Где искать</span>
           <select className="input" defaultValue="category" name="search_scope">
-            <option value="category">Current category</option>
-            <option value="site">Whole site</option>
+            <option value="category">Текущая категория</option>
+            <option value="site">Весь сайт</option>
           </select>
         </label>
         <label className="field">
-          <span className="label">Max price</span>
+          <span className="label">Макс. цена</span>
           <input className="input" name="max_price" min="0" step="0.01" type="number" />
         </label>
         <label className="field">
-          <span className="label">Min reviews</span>
+          <span className="label">Мин. отзывов</span>
           <input className="input" defaultValue="0" min="0" name="min_reviews" type="number" />
         </label>
         <label className="field">
-          <span className="label">Forbidden words</span>
-          <input className="input" name="forbidden_words" placeholder="no warranty, banned" />
+          <span className="label">Запрещённые слова</span>
+          <input className="input" name="forbidden_words" placeholder="без гарантии, бан" />
         </label>
         <button className="button" disabled={pending} type="submit">
           {pending ? <LoaderCircle className="spin" size={18} /> : <Search size={18} />}
-          {pending ? "Searching" : "Search"}
+          {pending ? "Ищем" : "Искать"}
         </button>
       </form>
 
       {pending ? (
         <div aria-live="polite" className="search-status">
           <span className="search-pulse" />
-          Searching FunPay lots
+          Идёт поиск лотов FunPay
         </div>
       ) : null}
 
@@ -92,23 +92,23 @@ export default function SearchPanel() {
         <table className="table">
           <thead>
             <tr>
-              <th>Lot</th>
-              <th>Price</th>
-              <th>Reviews</th>
-              <th>Warranty</th>
+              <th>Лот</th>
+              <th>Цена</th>
+              <th>Отзывы</th>
+              <th>Гарантия</th>
             </tr>
           </thead>
           <tbody>
             {lots.map((lot) => (
               <tr key={lot.url}>
                 <td><a href={lot.url} rel="noreferrer" target="_blank">{lot.title}</a></td>
-                <td>{lot.price ?? "Unknown"}</td>
+                <td>{lot.price ?? "Неизвестно"}</td>
                 <td>{lot.reviews}</td>
-                <td>{lot.warranty ?? <span className="muted">Not detected</span>}</td>
+                <td>{lot.warranty ?? <span className="muted">Не найдена</span>}</td>
               </tr>
             ))}
             {lots.length === 0 ? (
-              <tr><td className="muted" colSpan={4}>No results yet.</td></tr>
+              <tr><td className="muted" colSpan={4}>Пока нет результатов.</td></tr>
             ) : null}
           </tbody>
         </table>

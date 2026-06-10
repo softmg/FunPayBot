@@ -14,6 +14,12 @@ type AccountRow = {
 };
 
 const STATUSES = ["active", "blocked", "replacement_requested", "refunded"] as const;
+const STATUS_LABELS: Record<(typeof STATUSES)[number], string> = {
+  active: "Активен",
+  blocked: "Заблокирован",
+  replacement_requested: "Запрошена замена",
+  refunded: "Возврат",
+};
 
 export default function AccountsTable({ initialAccounts }: { initialAccounts: AccountRow[] }) {
   const [accounts, setAccounts] = useState<AccountRow[]>(initialAccounts);
@@ -29,7 +35,7 @@ export default function AccountsTable({ initialAccounts }: { initialAccounts: Ac
       body: JSON.stringify({ status: newStatus }),
     });
     if (!res.ok) {
-      setFeedback("Failed to update status.");
+      setFeedback("Не удалось обновить статус.");
       return;
     }
     setAccounts((prev) =>
@@ -47,29 +53,29 @@ export default function AccountsTable({ initialAccounts }: { initialAccounts: Ac
     });
     if (!res.ok) {
       const data = await res.json();
-      setFeedback(data.error ?? "Failed to contact seller.");
+      setFeedback(data.error ?? "Не удалось написать продавцу.");
       return;
     }
-    setFeedback("Message sent to seller.");
+    setFeedback("Сообщение отправлено продавцу.");
     setContactId(null);
     setMessage("");
   }
 
   return (
     <div className="panel grid">
-      {feedback ? <div className={feedback.includes("Failed") ? "error-text" : "success-text"}>{feedback}</div> : null}
+      {feedback ? <div className={feedback.includes("Не удалось") ? "error-text" : "success-text"}>{feedback}</div> : null}
 
       {contactId ? (
         <div className="create-form" style={{ gridTemplateColumns: "1fr auto" }}>
           <input
             className="input"
-            placeholder="Message to seller (refund/replacement request)"
+            placeholder="Сообщение продавцу (возврат или замена)"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
           />
           <div style={{ display: "flex", gap: "6px" }}>
-            <button className="button" onClick={() => contactSeller(contactId)}>Send</button>
-            <button className="button secondary" onClick={() => { setContactId(null); setMessage(""); }}>Cancel</button>
+            <button className="button" onClick={() => contactSeller(contactId)}>Отправить</button>
+            <button className="button secondary" onClick={() => { setContactId(null); setMessage(""); }}>Отмена</button>
           </div>
         </div>
       ) : null}
@@ -77,11 +83,11 @@ export default function AccountsTable({ initialAccounts }: { initialAccounts: Ac
       <table className="table">
         <thead>
           <tr>
-            <th>Status</th>
-            <th>Credentials</th>
-            <th>Seller</th>
-            <th>Confirmed</th>
-            <th>Actions</th>
+            <th>Статус</th>
+            <th>Данные</th>
+            <th>Продавец</th>
+            <th>Подтверждение</th>
+            <th>Действия</th>
           </tr>
         </thead>
         <tbody>
@@ -95,7 +101,7 @@ export default function AccountsTable({ initialAccounts }: { initialAccounts: Ac
                   style={{ border: "none", cursor: "pointer", fontSize: "12px" }}
                 >
                   {STATUSES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
+                    <option key={s} value={s}>{STATUS_LABELS[s]}</option>
                   ))}
                 </select>
               </td>
@@ -103,27 +109,27 @@ export default function AccountsTable({ initialAccounts }: { initialAccounts: Ac
               <td>
                 {account.chat_url ? (
                   <a href={account.chat_url} rel="noreferrer" target="_blank">
-                    {account.seller_name ?? "Chat"}
+                    {account.seller_name ?? "Чат"}
                   </a>
                 ) : (
-                  <span className="muted">No chat</span>
+                  <span className="muted">Нет чата</span>
                 )}
               </td>
               <td>
-                {account.confirmed_by ?? "Unknown"}<br />
+                {account.confirmed_by ?? "Неизвестно"}<br />
                 <span className="muted">{new Date(account.confirmed_at).toLocaleString()}</span>
               </td>
               <td>
                 {(account.status === "blocked" || account.status === "replacement_requested") && account.chat_url ? (
-                  <button className="button secondary" onClick={() => setContactId(account.id)} title="Message seller">
-                    <MessageCircle size={14} /> Contact
+                  <button className="button secondary" onClick={() => setContactId(account.id)} title="Написать продавцу">
+                    <MessageCircle size={14} /> Написать
                   </button>
                 ) : null}
               </td>
             </tr>
           ))}
           {accounts.length === 0 ? (
-            <tr><td className="muted" colSpan={5}>No confirmed accounts yet.</td></tr>
+            <tr><td className="muted" colSpan={5}>Подтверждённых аккаунтов пока нет.</td></tr>
           ) : null}
         </tbody>
       </table>
