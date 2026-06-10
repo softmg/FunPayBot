@@ -3,6 +3,7 @@
 import { LoaderCircle, Search, ShoppingCart } from "lucide-react";
 import type { FormEvent } from "react";
 import { useState } from "react";
+import { formatPrice } from "@/lib/format";
 
 type Lot = {
   title: string;
@@ -141,7 +142,7 @@ export default function SearchPanel() {
               return (
                 <tr key={lot.url}>
                   <td><a href={lot.url} rel="noreferrer" target="_blank">{lot.title}</a></td>
-                  <td>{lot.price ?? "Неизвестно"}</td>
+                  <td>{formatPrice(lot.price)}</td>
                   <td>{lot.reviews}</td>
                   <td>{lot.warranty ?? <span className="muted">Не найдена</span>}</td>
                   <td>
