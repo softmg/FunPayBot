@@ -1,6 +1,13 @@
 from decimal import Decimal
 
-from app.parser import LotSearchFilters, extract_warranty, parse_category_paths, parse_lots
+from app.parser import (
+    LotSearchFilters,
+    extract_warranty,
+    filters_for_category,
+    parse_category_matches,
+    parse_category_paths,
+    parse_lots,
+)
 
 
 def test_parse_lots_applies_filters() -> None:
@@ -42,3 +49,32 @@ def test_parse_category_paths_matches_relevant_games() -> None:
     """
 
     assert parse_category_paths(html, "Gemini api") == ["lots/4092/", "lots/4093/"]
+
+
+def test_category_matches_prioritize_title_hits() -> None:
+    html = """
+    <div class="promo-game-item">
+      <div class="game-title"><a href="https://funpay.com/en/lots/100/">Some API Game</a></div>
+    </div>
+    <div class="promo-game-item">
+      <div class="game-title"><a href="https://funpay.com/en/lots/200/">Gemini</a></div>
+      <ul><li><a href="https://funpay.com/en/lots/201/">Services</a></li></ul>
+    </div>
+    """
+
+    matches = parse_category_matches(html, "Gemini API")
+
+    assert [match.path for match in matches] == ["lots/200/", "lots/201/", "lots/100/"]
+    assert matches[0].matched_terms == frozenset({"gemini"})
+
+
+def test_filters_for_category_removes_category_terms_from_lot_query() -> None:
+    filters = filters_for_category(
+        LotSearchFilters(query="Gemini API", max_price=Decimal("10"), min_reviews=2, forbidden_words=("bad",)),
+        frozenset({"gemini"}),
+    )
+
+    assert filters.query == "api"
+    assert filters.max_price == Decimal("10")
+    assert filters.min_reviews == 2
+    assert filters.forbidden_words == ("bad",)

@@ -19,6 +19,13 @@ class LotSearchFilters:
     forbidden_words: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class CategoryMatch:
+    path: str
+    matched_terms: frozenset[str]
+    score: int
+
+
 SearchScope = Literal["category", "site"]
 
 
@@ -67,7 +74,7 @@ def lot_matches(text: str, filters: LotSearchFilters, price: Decimal | None, rev
 
 def parse_lots(html: str, filters: LotSearchFilters) -> list[dict]:
     soup = BeautifulSoup(html, "html.parser")
-    candidates: Iterable = soup.select("a[href*='/lots/'], a[href*='/orders/'], a.tc-item")
+    candidates: Iterable = soup.select("a.tc-item[href]")
     lots: list[dict] = []
     seen: set[str] = set()
 
@@ -99,33 +106,59 @@ def parse_lots(html: str, filters: LotSearchFilters) -> list[dict]:
     return lots
 
 
-def parse_category_paths(html: str, query: str, limit: int = 8) -> list[str]:
+def normalize_lot_path(href: str) -> str:
+    parsed = urlparse(urljoin(settings.funpay_base_url, href))
+    path = parsed.path.lstrip("/")
+    if path.startswith("en/"):
+        path = path[3:]
+    return path
+
+
+def parse_category_matches(html: str, query: str, limit: int = 20) -> list[CategoryMatch]:
     soup = BeautifulSoup(html, "html.parser")
     terms = [term for term in query.lower().split() if term]
-    paths: list[str] = []
-    seen: set[str] = set()
+    matches: list[CategoryMatch] = []
+    best_by_path: dict[str, CategoryMatch] = {}
 
     for node in soup.select(".promo-game-item"):
-        text = normalize_text(node.get_text(" ")).lower()
-        if terms and not any(term in text for term in terms):
+        title = normalize_text(node.select_one(".game-title").get_text(" ") if node.select_one(".game-title") else "")
+        text = normalize_text(node.get_text(" "))
+        lowered_title = title.lower()
+        lowered_text = text.lower()
+        title_terms = {term for term in terms if term in lowered_title}
+        text_terms = {term for term in terms if term in lowered_text}
+        if terms and not text_terms:
             continue
+        score = len(title_terms) * 4 + len(text_terms)
+        if terms and terms[0] in title_terms:
+            score += 2
 
         for link in node.select("a[href*='/lots/']"):
             href = link.get("href")
             if not href:
                 continue
-            parsed = urlparse(urljoin(settings.funpay_base_url, href))
-            path = parsed.path.lstrip("/")
-            if path.startswith("en/"):
-                path = path[3:]
-            if path in seen:
-                continue
-            seen.add(path)
-            paths.append(path)
-            if len(paths) >= limit:
-                return paths
+            path = normalize_lot_path(href)
+            current = best_by_path.get(path)
+            candidate = CategoryMatch(path=path, matched_terms=frozenset(text_terms), score=score)
+            if current is None or candidate.score > current.score:
+                best_by_path[path] = candidate
 
-    return paths
+    matches = sorted(best_by_path.values(), key=lambda match: match.score, reverse=True)
+    return matches[:limit]
+
+
+def parse_category_paths(html: str, query: str, limit: int = 20) -> list[str]:
+    return [match.path for match in parse_category_matches(html, query, limit=limit)]
+
+
+def filters_for_category(filters: LotSearchFilters, category_terms: frozenset[str]) -> LotSearchFilters:
+    lot_terms = [term for term in filters.query.lower().split() if term and term not in category_terms]
+    return LotSearchFilters(
+        query=" ".join(lot_terms),
+        max_price=filters.max_price,
+        min_reviews=filters.min_reviews,
+        forbidden_words=filters.forbidden_words,
+    )
 
 
 async def fetch_html(client: httpx.AsyncClient, path: str) -> str:
@@ -142,15 +175,16 @@ async def search_lots(filters: LotSearchFilters, scope: SearchScope = "category"
             return parse_lots(html, filters)
 
         index_html = await fetch_html(client, "en/")
-        category_paths = parse_category_paths(index_html, filters.query)
-        if not category_paths:
+        category_matches = parse_category_matches(index_html, filters.query)
+        if not category_matches:
             return []
 
         lots: list[dict] = []
         seen: set[str] = set()
-        for path in category_paths:
-            html = await fetch_html(client, path)
-            for lot in parse_lots(html, filters):
+        for match in category_matches:
+            html = await fetch_html(client, match.path)
+            category_filters = filters_for_category(filters, match.matched_terms)
+            for lot in parse_lots(html, category_filters):
                 if lot["url"] in seen:
                     continue
                 seen.add(lot["url"])
