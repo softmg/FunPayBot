@@ -109,16 +109,24 @@ async def _fetch_and_relay_new_messages(
 
         try:
             formatted = f"💬 *{_escape_md(chat_name or funpay_chat_id)}*\n{_escape_md(author)}: {_escape_md(text)}"
-            reply_markup = None
-            if credentials := extract_credentials(text):
-                token = create_pending_credentials(manager_tg_id, credentials, internal_chat_id)
+            buttons = []
+            if text.strip() and author.lower() != "funpay":
+                raw_token = create_pending_credentials(manager_tg_id, text.strip(), internal_chat_id)
+                buttons.append(
+                    [InlineKeyboardButton("Сохранить сообщение как аккаунт", callback_data=f"confirm_credentials:{raw_token}")]
+                )
+
+            credentials = extract_credentials(text)
+            if credentials and credentials != text.strip():
+                parsed_token = create_pending_credentials(manager_tg_id, credentials, internal_chat_id)
                 formatted = (
                     f"{formatted}\n\n"
-                    f"Найдены данные аккаунта:\n`{_escape_md(credentials)}`"
+                    f"Найдены возможные данные аккаунта:\n`{_escape_md(credentials)}`"
                 )
-                reply_markup = InlineKeyboardMarkup(
-                    [[InlineKeyboardButton("Подтвердить и сохранить", callback_data=f"confirm_credentials:{token}")]]
+                buttons.append(
+                    [InlineKeyboardButton("Сохранить найденные данные", callback_data=f"confirm_credentials:{parsed_token}")]
                 )
+            reply_markup = InlineKeyboardMarkup(buttons) if buttons else None
             await bot.send_message(
                 chat_id=manager_tg_id,
                 text=formatted,

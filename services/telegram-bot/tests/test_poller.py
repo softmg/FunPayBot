@@ -89,7 +89,7 @@ async def test_poll_once_relays_new_messages(mock_client_class, mock_db) -> None
     mock_db.save_inbound_message.assert_called_once_with("internal-uuid", "15", "seller3", "Here are your credentials")
     mock_db.assign_chat_to_pending_order.assert_not_called()
     bot.send_message.assert_called_once()
-    assert bot.send_message.call_args.kwargs["reply_markup"] is None
+    assert bot.send_message.call_args.kwargs["reply_markup"] is not None
 
 
 @pytest.mark.asyncio
@@ -127,7 +127,7 @@ async def test_poll_once_auto_assigns_pending_order_chat(mock_client_class, mock
 
 
 @pytest.mark.asyncio
-@patch("bot.poller.create_pending_credentials", return_value="abc123")
+@patch("bot.poller.create_pending_credentials", side_effect=["raw123", "parsed123"])
 @patch("bot.poller.db")
 @patch("bot.poller.httpx.AsyncClient")
 async def test_poll_once_prefills_detected_credentials(mock_client_class, mock_db, mock_create_pending) -> None:
@@ -162,12 +162,66 @@ async def test_poll_once_prefills_detected_credentials(mock_client_class, mock_d
     bot = AsyncMock()
     await _poll_once(bot)
 
-    mock_create_pending.assert_called_once_with(
+    assert mock_create_pending.call_args_list[0].args == (
+        55555,
+        "ввести: siptqrmuw86489+4913fda6@outlook.com----#C#QrNA6jd7r$eFd",
+        "internal-uuid",
+    )
+    assert mock_create_pending.call_args_list[1].args == (
         55555,
         "siptqrmuw86489+4913fda6@outlook.com:#C#QrNA6jd7r$eFd",
         "internal-uuid",
     )
-    assert "Найдены данные аккаунта" in bot.send_message.call_args.kwargs["text"]
+    assert "Найдены возможные данные аккаунта" in bot.send_message.call_args.kwargs["text"]
+    assert bot.send_message.call_args.kwargs["reply_markup"] is not None
+
+
+@pytest.mark.asyncio
+@patch("bot.poller.create_pending_credentials", return_value="raw123")
+@patch("bot.poller.db")
+@patch("bot.poller.httpx.AsyncClient")
+async def test_poll_once_offers_raw_delivery_capture_without_parsed_credentials(
+    mock_client_class,
+    mock_db,
+    mock_create_pending,
+) -> None:
+    chats_response = MagicMock(
+        is_success=True,
+        json=lambda: {"chats": [{"id": 600, "name": "seller6", "node_msg_id": 26}]},
+    )
+    history_response = MagicMock(
+        is_success=True,
+        json=lambda: {
+            "messages": [
+                {
+                    "id": 26,
+                    "text": "Сайт с кодом: https://example.com\nИнструкция внутри заказа",
+                    "author": "seller6",
+                }
+            ]
+        },
+    )
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.get = AsyncMock(side_effect=[chats_response, history_response])
+    mock_client_class.return_value = mock_client
+
+    mock_db.ensure_chat = AsyncMock(return_value="internal-uuid")
+    mock_db.get_manager_telegram_id_for_chat = AsyncMock(return_value=66666)
+    mock_db.get_watermark = AsyncMock(return_value=None)
+    mock_db.save_inbound_message = AsyncMock()
+
+    bot = AsyncMock()
+    await _poll_once(bot)
+
+    mock_create_pending.assert_called_once_with(
+        66666,
+        "Сайт с кодом: https://example.com\nИнструкция внутри заказа",
+        "internal-uuid",
+    )
+    assert "Найдены возможные данные аккаунта" not in bot.send_message.call_args.kwargs["text"]
     assert bot.send_message.call_args.kwargs["reply_markup"] is not None
 
 
