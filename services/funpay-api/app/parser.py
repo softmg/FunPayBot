@@ -1,3 +1,4 @@
+import asyncio
 import re
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
@@ -27,6 +28,13 @@ class CategoryMatch:
 
 
 SearchScope = Literal["category", "site"]
+
+PAGE_DESCRIPTION_HEADINGS = {
+    "short description",
+    "краткое описание",
+    "подробное описание",
+    "detailed description",
+}
 
 
 def parse_price(text: str) -> Decimal | None:
@@ -81,6 +89,45 @@ def extract_warranty(text: str) -> str | None:
         re.IGNORECASE,
     )
     return normalize_text(match.group(0)) if match else None
+
+
+def extract_lot_descriptions(html: str) -> dict[str, str | None]:
+    soup = BeautifulSoup(html, "html.parser")
+    descriptions: dict[str, str | None] = {
+        "short_description": None,
+        "detailed_description": None,
+    }
+
+    for param in soup.select(".param-item"):
+        heading = param.find(["h5", "div"])
+        value = param.find("div")
+        if heading is None or value is None:
+            continue
+
+        heading_text = normalize_text(heading.get_text(" ")).lower()
+        if heading_text not in PAGE_DESCRIPTION_HEADINGS:
+            continue
+
+        value_text = normalize_text(value.get_text(" "))
+        if not value_text:
+            continue
+
+        if heading_text in {"short description", "краткое описание"}:
+            descriptions["short_description"] = value_text
+        elif heading_text in {"подробное описание", "detailed description"}:
+            descriptions["detailed_description"] = value_text
+
+    return descriptions
+
+
+def extract_warranty_from_texts(*texts: str | None) -> str | None:
+    for text in texts:
+        if not text:
+            continue
+        warranty = extract_warranty(text)
+        if warranty:
+            return warranty
+    return None
 
 
 def lot_matches(text: str, filters: LotSearchFilters, price: Decimal | None, reviews: int) -> bool:
@@ -193,27 +240,46 @@ async def fetch_html(client: httpx.AsyncClient, path: str) -> str:
     return response.text
 
 
+async def fetch_lot_details(client: httpx.AsyncClient, lot_url: str) -> dict[str, str | None]:
+    response = await client.get(lot_url, follow_redirects=True)
+    response.raise_for_status()
+    return extract_lot_descriptions(response.text)
+
+
 async def search_lots(filters: LotSearchFilters, scope: SearchScope = "category") -> list[dict]:
     async with httpx.AsyncClient(timeout=20) as client:
         if scope == "category":
             html = await fetch_html(client, settings.funpay_category_path)
-            return parse_lots(html, filters)
+            lots = parse_lots(html, filters)
+        else:
+            index_html = await fetch_html(client, "en/")
+            category_matches = parse_category_matches(index_html, filters.query)
+            if not category_matches:
+                return []
 
-        index_html = await fetch_html(client, "en/")
-        category_matches = parse_category_matches(index_html, filters.query)
-        if not category_matches:
+            lots = []
+            seen: set[str] = set()
+            for match in category_matches:
+                html = await fetch_html(client, match.path)
+                category_filters = filters_for_category(filters, match.matched_terms)
+                for lot in parse_lots(html, category_filters):
+                    if lot["url"] in seen:
+                        continue
+                    seen.add(lot["url"])
+                    lots.append(lot)
+
+        if not lots:
             return []
 
-        lots: list[dict] = []
-        seen: set[str] = set()
-        for match in category_matches:
-            html = await fetch_html(client, match.path)
-            category_filters = filters_for_category(filters, match.matched_terms)
-            for lot in parse_lots(html, category_filters):
-                if lot["url"] in seen:
-                    continue
-                seen.add(lot["url"])
-                lots.append(lot)
+        details = await asyncio.gather(*(fetch_lot_details(client, lot["url"]) for lot in lots))
+        for lot, lot_details in zip(lots, details, strict=True):
+            lot["short_description"] = lot_details["short_description"]
+            lot["detailed_description"] = lot_details["detailed_description"]
+            lot["warranty"] = extract_warranty_from_texts(
+                lot_details["detailed_description"],
+                lot_details["short_description"],
+                lot["warranty"],
+            )
         return lots
 
 
@@ -221,5 +287,8 @@ async def fetch_funpay_warranty(lot_url: str) -> str | None:
     async with httpx.AsyncClient(timeout=20) as client:
         response = await client.get(lot_url, follow_redirects=True)
         response.raise_for_status()
-    text = normalize_text(BeautifulSoup(response.text, "html.parser").get_text(" "))
-    return extract_warranty(text)
+    descriptions = extract_lot_descriptions(response.text)
+    return extract_warranty_from_texts(
+        descriptions["detailed_description"],
+        descriptions["short_description"],
+    )

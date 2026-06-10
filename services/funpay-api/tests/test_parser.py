@@ -2,7 +2,9 @@ from decimal import Decimal
 
 from app.parser import (
     LotSearchFilters,
+    extract_lot_descriptions,
     extract_warranty,
+    extract_warranty_from_texts,
     filters_for_category,
     parse_category_matches,
     parse_category_paths,
@@ -71,6 +73,24 @@ def test_parse_lots_uses_dedicated_price_block_when_title_contains_numbers() -> 
 
 def test_extract_warranty_detects_russian_text() -> None:
     assert extract_warranty("Описание. Гарантия: 24 часа после покупки.") == "Гарантия: 24 часа после покупки"
+
+
+def test_extract_lot_descriptions_reads_detailed_description() -> None:
+    html = """
+    <div class="param-item"><h5>Short description</h5><div>Short summary</div></div>
+    <div class="param-item"><h5>Detailed description</h5><div>ГАРАНТИЯ ВЕСЬ СРОК 🟢, С подпиской</div></div>
+    """
+
+    descriptions = extract_lot_descriptions(html)
+
+    assert descriptions["short_description"] == "Short summary"
+    assert descriptions["detailed_description"] == "ГАРАНТИЯ ВЕСЬ СРОК 🟢, С подпиской"
+
+
+def test_extract_warranty_prefers_detailed_description() -> None:
+    warranty = extract_warranty_from_texts(None, "Some other text", "ГАРАНТИЯ ВЕСЬ СРОК 🟢, С подпиской")
+
+    assert warranty == "ГАРАНТИЯ ВЕСЬ СРОК 🟢, С подпиской"
 
 
 def test_parse_category_paths_matches_relevant_games() -> None:
