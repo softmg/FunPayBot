@@ -29,7 +29,11 @@ async def poll_funpay_messages(bot) -> None:
 async def _poll_once(bot) -> None:
     """Single poll iteration: fetch chats, detect new messages, relay to managers."""
     async with httpx.AsyncClient(timeout=20) as client:
-        response = await client.get(f"{settings.funpay_api_url}/chats", params={"update": "true"})
+        try:
+            response = await client.get(f"{settings.funpay_api_url}/chats", params={"update": "true"})
+        except httpx.TimeoutException as exc:
+            logger.warning("Таймаут при получении списка чатов: %s", exc)
+            return
 
     if not response.is_success:
         logger.warning("Не удалось получить список чатов: %s", response.status_code)
@@ -71,7 +75,11 @@ async def _fetch_and_relay_new_messages(
         params["from_id"] = watermark
 
     async with httpx.AsyncClient(timeout=20) as client:
-        response = await client.get(f"{settings.funpay_api_url}/chats/{funpay_chat_id}/history", params=params)
+        try:
+            response = await client.get(f"{settings.funpay_api_url}/chats/{funpay_chat_id}/history", params=params)
+        except httpx.TimeoutException as exc:
+            logger.warning("Таймаут при получении истории чата %s: %s", funpay_chat_id, exc)
+            return
 
     if not response.is_success:
         logger.warning("Не удалось получить историю чата %s: %s", funpay_chat_id, response.status_code)

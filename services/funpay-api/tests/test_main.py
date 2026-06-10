@@ -45,6 +45,17 @@ def test_lots_search_accepts_site_scope(mock_search: AsyncMock) -> None:
     assert mock_search.await_args.kwargs["scope"] == "site"
 
 
+@patch("app.main.search_lots", new_callable=AsyncMock)
+def test_lots_search_returns_504_on_timeout(mock_search: AsyncMock) -> None:
+    from app.parser import FunPayUpstreamTimeoutError
+
+    mock_search.side_effect = FunPayUpstreamTimeoutError("Timed out while fetching FunPay page")
+    response = client.post("/lots/search", json={"query": "test"})
+
+    assert response.status_code == 504
+    assert response.json()["detail"] == "Timed out while fetching FunPay page"
+
+
 @patch("app.main.fetch_funpay_warranty", new_callable=AsyncMock)
 def test_warranty_endpoint(mock_warranty: AsyncMock) -> None:
     mock_warranty.return_value = "Гарантия: 24 часа"

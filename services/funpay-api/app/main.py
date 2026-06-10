@@ -13,7 +13,7 @@ from app.funpay_client import (
     exceptions,
     funpay_client,
 )
-from app.parser import LotSearchFilters, fetch_funpay_warranty, search_lots
+from app.parser import FunPayUpstreamTimeoutError, LotSearchFilters, fetch_funpay_warranty, search_lots
 
 app = FastAPI(title="FunPayBot API", version="0.1.0")
 
@@ -80,7 +80,10 @@ async def lots_search(request: LotSearchRequest) -> dict:
         min_reviews=request.min_reviews,
         forbidden_words=tuple(request.forbidden_words),
     )
-    lots = await search_lots(filters, scope=request.search_scope)
+    try:
+        lots = await search_lots(filters, scope=request.search_scope)
+    except FunPayUpstreamTimeoutError as exc:
+        raise HTTPException(status_code=504, detail=str(exc)) from exc
     return {"results": lots, "count": len(lots)}
 
 
@@ -99,7 +102,12 @@ async def lots_search_stream(
             min_reviews=min_reviews,
             forbidden_words=tuple(word.strip() for word in forbidden_words.split(",") if word.strip()),
         )
-        lots = await search_lots(filters)
+        try:
+            lots = await search_lots(filters)
+        except FunPayUpstreamTimeoutError as exc:
+            payload = json.dumps({"error": str(exc)}, ensure_ascii=False)
+            yield f"event: error\ndata: {payload}\n\n"
+            return
         payload = json.dumps({"count": len(lots), "results": lots}, ensure_ascii=False)
         yield f"event: complete\ndata: {payload}\n\n"
 

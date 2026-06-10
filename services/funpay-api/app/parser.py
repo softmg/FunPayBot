@@ -41,6 +41,10 @@ PAGE_DESCRIPTION_HEADINGS = {
 LOT_DETAILS_CONCURRENCY = 5
 
 
+class FunPayUpstreamTimeoutError(RuntimeError):
+    pass
+
+
 def parse_price(text: str) -> Decimal | None:
     match = re.search(r"(\d+(?:[\s.,]\d+)*)", text.replace("\xa0", " "))
     if not match:
@@ -239,8 +243,11 @@ def filters_for_category(filters: LotSearchFilters, category_terms: frozenset[st
 
 async def fetch_html(client: httpx.AsyncClient, path: str) -> str:
     url = urljoin(settings.funpay_base_url, path)
-    response = await client.get(url, follow_redirects=True)
-    response.raise_for_status()
+    try:
+        response = await client.get(url, follow_redirects=True)
+        response.raise_for_status()
+    except httpx.TimeoutException as exc:
+        raise FunPayUpstreamTimeoutError(f"Timed out while fetching FunPay page: {url}") from exc
     return response.text
 
 
@@ -306,8 +313,11 @@ async def search_lots(filters: LotSearchFilters, scope: SearchScope = "category"
 
 async def fetch_funpay_warranty(lot_url: str, title: str | None = None) -> str | None:
     async with httpx.AsyncClient(timeout=20) as client:
-        response = await client.get(lot_url, follow_redirects=True)
-        response.raise_for_status()
+        try:
+            response = await client.get(lot_url, follow_redirects=True)
+            response.raise_for_status()
+        except httpx.HTTPError:
+            return extract_warranty_from_texts(title)
     descriptions = extract_lot_descriptions(response.text)
     return extract_warranty_from_texts(
         descriptions["detailed_description"],

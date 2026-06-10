@@ -1,5 +1,6 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from bot.poller import _poll_once, _escape_md
@@ -87,3 +88,19 @@ def test_escape_md_escapes_special_chars() -> None:
     assert _escape_md("hello_world") == "hello\\_world"
     assert _escape_md("price: 100$") == "price: 100$"
     assert _escape_md("*bold*") == "\\*bold\\*"
+
+
+@pytest.mark.asyncio
+@patch("bot.poller.db")
+@patch("bot.poller.httpx.AsyncClient")
+async def test_poll_once_handles_timeout(mock_client_class, mock_db) -> None:
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.get.side_effect = httpx.ReadTimeout("timed out")
+    mock_client_class.return_value = mock_client
+
+    bot = MagicMock()
+    await _poll_once(bot)
+
+    bot.send_message.assert_not_called()
