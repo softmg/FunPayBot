@@ -63,6 +63,21 @@ describe("orders route", () => {
     );
   });
 
+  it("returns a timeout error when funpay-api order creation hangs", async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(
+      new DOMException("The operation was aborted", "AbortError")
+    ) as unknown as typeof fetch;
+
+    const response = await POST(jsonRequest({ lot_url: "https://funpay.com/lots/1355/1/", payment_method_id: "42" }));
+
+    expect(response.status).toBe(504);
+    await expect(response.json()).resolves.toEqual({ error: "FunPay order creation timed out" });
+    expect(mockedQuery).toHaveBeenCalledWith(
+      expect.stringContaining("order.create_failed"),
+      expect.arrayContaining(["user-1"])
+    );
+  });
+
   it("stores created orders with payment links", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(
       Response.json({ payment_link: "https://funpay.com/pay/abc" }, { status: 200 })
@@ -118,5 +133,27 @@ describe("orders route", () => {
       })
     );
     expect(globalThis.fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("returns the created order when Telegram notification times out", async () => {
+    process.env.TELEGRAM_BOT_TOKEN = "telegram-token";
+    process.env.ADMIN_TELEGRAM_IDS = "1001";
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(Response.json({ payment_link: "https://funpay.com/pay/abc" }, { status: 200 }))
+      .mockRejectedValueOnce(new DOMException("The operation was aborted", "AbortError")) as unknown as typeof fetch;
+    mockedQuery
+      .mockResolvedValueOnce([{ id: "order-1" }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const response = await POST(jsonRequest({ lot_url: "https://funpay.com/lots/1355/1/", payment_method_id: "42" }));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      id: "order-1",
+      payment_link: "https://funpay.com/pay/abc",
+      telegram_notified: false
+    });
   });
 });

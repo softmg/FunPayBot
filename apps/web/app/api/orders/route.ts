@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { query } from "@/lib/db";
+import { fetchWithTimeout, TELEGRAM_API_TIMEOUT_MS, UpstreamTimeoutError } from "@/lib/fetch-timeout";
 
 const schema = z.object({
   lot_url: z.string().url(),
@@ -57,17 +58,25 @@ async function notifyPaymentLink(paymentLink: string, lotUrl: string, orderId: s
 
   const results = await Promise.all(
     recipients.map(async (chatId) => {
-      const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text,
-          disable_web_page_preview: true
-        }),
-        cache: "no-store"
-      });
-      return response.ok;
+      try {
+        const response = await fetchWithTimeout(
+          `https://api.telegram.org/bot${token}/sendMessage`,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text,
+              disable_web_page_preview: true
+            }),
+            cache: "no-store"
+          },
+          TELEGRAM_API_TIMEOUT_MS
+        );
+        return response.ok;
+      } catch {
+        return false;
+      }
     })
   );
 
@@ -91,12 +100,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "FUNPAY_API_URL is not configured" }, { status: 503 });
   }
 
-  const response = await fetch(`${process.env.FUNPAY_API_URL}/orders`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(parsed.data),
-    cache: "no-store"
-  });
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(`${process.env.FUNPAY_API_URL}/orders`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(parsed.data),
+      cache: "no-store"
+    });
+  } catch (error) {
+    if (!(error instanceof UpstreamTimeoutError)) {
+      throw error;
+    }
+    await query(
+      "INSERT INTO audit_log (actor_user_id, action, entity_type, metadata) VALUES ($1, 'order.create_failed', 'order', $2)",
+      [user.id, JSON.stringify({
+        lot_url: parsed.data.lot_url,
+        payment_method_id: parsed.data.payment_method_id,
+        status: 504,
+        error: error.message
+      })]
+    );
+    return NextResponse.json({ error: "FunPay order creation timed out" }, { status: 504 });
+  }
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {

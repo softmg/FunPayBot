@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { query } from "@/lib/db";
+import { fetchWithTimeout, UpstreamTimeoutError } from "@/lib/fetch-timeout";
 
 const schema = z.object({
   lot_url: z.string().url()
@@ -28,12 +29,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "FUNPAY_API_URL is not configured" }, { status: 503 });
   }
 
-  const response = await fetch(`${process.env.FUNPAY_API_URL}/orders/payment-methods`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(parsed.data),
-    cache: "no-store"
-  });
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(`${process.env.FUNPAY_API_URL}/orders/payment-methods`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(parsed.data),
+      cache: "no-store"
+    });
+  } catch (error) {
+    if (!(error instanceof UpstreamTimeoutError)) {
+      throw error;
+    }
+    await query(
+      "INSERT INTO audit_log (actor_user_id, action, entity_type, metadata) VALUES ($1, 'order.payment_methods_failed', 'order', $2)",
+      [user.id, JSON.stringify({ lot_url: parsed.data.lot_url, status: 504, error: error.message })]
+    );
+    return NextResponse.json({ error: "FunPay payment methods lookup timed out" }, { status: 504 });
+  }
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {
