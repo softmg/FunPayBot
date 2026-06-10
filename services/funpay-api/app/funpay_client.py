@@ -322,9 +322,14 @@ def find_payment_method(methods: list[dict], payment_method_id: str) -> dict:
     return selected
 
 
+def is_payment_link(value: str) -> bool:
+    parsed = urlparse(value)
+    return bool(re.search(r"(^|/)(orders/|pay|payment|checkout)", parsed.path, re.IGNORECASE))
+
+
 def extract_payment_link(response: Any, fallback_url: str) -> str:
     location = response.headers.get("location")
-    if location:
+    if location and is_payment_link(location):
         return urljoin(fallback_url, location)
 
     content_type = response.headers.get("content-type", "")
@@ -332,7 +337,7 @@ def extract_payment_link(response: Any, fallback_url: str) -> str:
         data = response.json()
         for key in ("payment_link", "payment_url", "url", "location", "redirect"):
             value = data.get(key)
-            if isinstance(value, str) and value:
+            if isinstance(value, str) and value and is_payment_link(value):
                 return urljoin(fallback_url, value)
 
     soup = BeautifulSoup(response.text, "html.parser")
@@ -340,11 +345,11 @@ def extract_payment_link(response: Any, fallback_url: str) -> str:
         attr = "href" if selector == "a[href]" else "action"
         for node in soup.select(selector):
             value = node.get(attr)
-            if value and re.search(r"(orders/|pay|payment|checkout)", value, re.IGNORECASE):
+            if value and is_payment_link(value):
                 return urljoin(fallback_url, value)
 
     current_url = str(response.url)
-    if current_url and current_url != fallback_url:
+    if current_url and current_url != fallback_url and is_payment_link(current_url):
         return current_url
 
     raise FunPayPurchaseFlowError("FunPay order was created, but no payment link was found in the response")

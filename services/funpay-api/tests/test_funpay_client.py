@@ -4,7 +4,9 @@ import pytest
 
 from app.funpay_client import (
     FunPayNotConfiguredError,
+    FunPayPurchaseFlowError,
     FunPayClient,
+    extract_payment_link,
     extract_lot_id,
     parse_order_form,
 )
@@ -113,10 +115,15 @@ def test_parse_order_form_uses_payment_titles_and_prices_from_data_content() -> 
 
 
 def test_parse_order_form_rejects_unavailable_selected_payment_method() -> None:
-    from app.funpay_client import FunPayPurchaseFlowError
-
     with pytest.raises(FunPayPurchaseFlowError):
         parse_order_form(order_form_html(), "https://funpay.com/en/lots/offer?id=68954385", "999")
+
+
+def test_extract_payment_link_rejects_chat_redirect() -> None:
+    response = FakeResponse(url="https://funpay.com/en/chat/")
+
+    with pytest.raises(FunPayPurchaseFlowError, match="no payment link"):
+        extract_payment_link(response, "https://funpay.com/en/lots/offer?id=68954385")
 
 
 class FakeResponse:
