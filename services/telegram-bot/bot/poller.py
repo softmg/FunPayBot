@@ -12,16 +12,16 @@ logger = logging.getLogger(__name__)
 async def poll_funpay_messages(bot) -> None:
     """Background task that polls FunPay for new seller messages and relays them to assigned managers."""
     interval = settings.funpay_poll_interval_seconds
-    logger.info("poller started, interval=%ds", interval)
+    logger.info("Опросчик запущен, интервал=%dс", interval)
 
     while True:
         try:
             await _poll_once(bot)
         except asyncio.CancelledError:
-            logger.info("poller cancelled")
+            logger.info("Опросчик остановлен")
             return
         except Exception:
-            logger.exception("poller iteration failed")
+            logger.exception("Сбой итерации опросчика")
 
         await asyncio.sleep(interval)
 
@@ -32,7 +32,7 @@ async def _poll_once(bot) -> None:
         response = await client.get(f"{settings.funpay_api_url}/chats", params={"update": "true"})
 
     if not response.is_success:
-        logger.warning("failed to fetch chats: %s", response.status_code)
+        logger.warning("Не удалось получить список чатов: %s", response.status_code)
         return
 
     chats = response.json().get("chats", [])
@@ -74,7 +74,7 @@ async def _fetch_and_relay_new_messages(
         response = await client.get(f"{settings.funpay_api_url}/chats/{funpay_chat_id}/history", params=params)
 
     if not response.is_success:
-        logger.warning("failed to fetch history for chat %s: %s", funpay_chat_id, response.status_code)
+        logger.warning("Не удалось получить историю чата %s: %s", funpay_chat_id, response.status_code)
         return
 
     messages = response.json().get("messages", [])
@@ -89,7 +89,7 @@ async def _fetch_and_relay_new_messages(
             continue
 
         text = msg.get("text", "")
-        author = msg.get("author", "Seller")
+        author = msg.get("author", "Продавец")
 
         await db.save_inbound_message(internal_chat_id, str(msg_id), author, text)
 
@@ -101,7 +101,7 @@ async def _fetch_and_relay_new_messages(
                 parse_mode="MarkdownV2",
             )
         except Exception:
-            logger.exception("failed to send message to manager %d", manager_tg_id)
+            logger.exception("Не удалось отправить сообщение менеджеру %d", manager_tg_id)
 
 
 def _escape_md(text: str) -> str:

@@ -18,16 +18,42 @@ from bot.db import db
 from bot.poller import poll_funpay_messages
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 _poller_task: asyncio.Task | None = None
+
+
+def _redact_secrets(value: str) -> str:
+    if settings.telegram_bot_token:
+        value = value.replace(settings.telegram_bot_token, "<redacted>")
+        value = value.replace(f"bot{settings.telegram_bot_token}", "bot<redacted>")
+    return value
+
+
+class SensitiveLogFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.msg, str):
+            record.msg = _redact_secrets(record.msg)
+        if isinstance(record.args, tuple):
+            record.args = tuple(_redact_secrets(arg) if isinstance(arg, str) else arg for arg in record.args)
+        elif isinstance(record.args, dict):
+            record.args = {
+                key: _redact_secrets(value) if isinstance(value, str) else value
+                for key, value in record.args.items()
+            }
+        return True
+
+
+for handler in logging.getLogger().handlers:
+    handler.addFilter(SensitiveLogFilter())
 
 
 async def guarded(update: Update) -> bool:
     user = update.effective_user
     if not user or not await db.is_allowed_user(user.id):
         if update.effective_chat:
-            await update.effective_chat.send_message("Access denied.")
+            await update.effective_chat.send_message("Доступ запрещен.")
         return False
     return True
 
@@ -36,10 +62,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await guarded(update):
         return
     await update.effective_chat.send_message(
-        "FunPayBot is ready.\n"
-        "/send <chat_id> <message> — relay to seller\n"
-        "/chats — list your assigned chats\n"
-        "/assign <chat_id> <telegram_user_id> — assign chat (admin)"
+        "FunPayBot готов к работе.\n"
+        "/send <chat_id> <message> — отправить сообщение продавцу\n"
+        "/chats — список ваших назначенных чатов\n"
+        "/assign <chat_id> <telegram_user_id> — назначить чат (только админ)"
     )
 
 
@@ -47,7 +73,7 @@ async def send_to_seller(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if not await guarded(update):
         return
     if len(context.args) < 2:
-        await update.effective_chat.send_message("Usage: /send <funpay_chat_id> <message>")
+        await update.effective_chat.send_message("Использование: /send <funpay_chat_id> <message>")
         return
 
     chat_id = context.args[0]
@@ -58,10 +84,10 @@ async def send_to_seller(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             json={"chat_id": chat_id, "body": body},
         )
     if not response.is_success:
-        await update.effective_chat.send_message("Message failed.")
+        await update.effective_chat.send_message("Не удалось отправить сообщение.")
         return
     await db.save_outbound_message(update.effective_user.id, chat_id, body)
-    await update.effective_chat.send_message("Sent.")
+    await update.effective_chat.send_message("Отправлено.")
 
 
 async def list_chats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -70,13 +96,13 @@ async def list_chats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         return
     chats = await db.get_assigned_chats(update.effective_user.id)
     if not chats:
-        await update.effective_chat.send_message("No chats assigned to you.")
+        await update.effective_chat.send_message("Вам не назначено ни одного чата.")
         return
     lines = []
     for chat in chats:
-        seller = chat["seller_name"] or "Unknown"
+        seller = chat["seller_name"] or "Неизвестно"
         lines.append(f"• {chat['funpay_chat_id']} — {seller}")
-    await update.effective_chat.send_message("Your assigned chats:\n" + "\n".join(lines))
+    await update.effective_chat.send_message("Ваши назначенные чаты:\n" + "\n".join(lines))
 
 
 async def assign_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -86,28 +112,28 @@ async def assign_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     user = await db.user_by_telegram(update.effective_user.id)
     if not user or user["role"] != "admin":
         if update.effective_user.id not in settings.admin_ids:
-            await update.effective_chat.send_message("Admin only.")
+            await update.effective_chat.send_message("Только для администратора.")
             return
 
     if len(context.args) < 2:
-        await update.effective_chat.send_message("Usage: /assign <funpay_chat_id> <manager_telegram_id>")
+        await update.effective_chat.send_message("Использование: /assign <funpay_chat_id> <manager_telegram_id>")
         return
 
     funpay_chat_id = context.args[0]
     try:
         manager_tg_id = int(context.args[1])
     except ValueError:
-        await update.effective_chat.send_message("Invalid Telegram ID.")
+        await update.effective_chat.send_message("Некорректный Telegram ID.")
         return
 
     manager = await db.user_by_telegram(manager_tg_id)
     if not manager:
-        await update.effective_chat.send_message("Manager not found for that Telegram ID.")
+        await update.effective_chat.send_message("Менеджер с таким Telegram ID не найден.")
         return
 
     await db.ensure_chat(funpay_chat_id)
     await db.assign_chat(funpay_chat_id, manager["id"])
-    await update.effective_chat.send_message(f"Chat {funpay_chat_id} assigned to {manager['display_name']}.")
+    await update.effective_chat.send_message(f"Чат {funpay_chat_id} назначен пользователю {manager['display_name']}.")
 
 
 async def text_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -117,14 +143,16 @@ async def text_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
     credentials = extract_credentials(update.message.text)
     if not credentials:
-        await update.message.reply_text("No credentials detected. Send login:password or use /send for seller chat.")
+        await update.message.reply_text(
+            "Не удалось распознать данные для входа. Отправьте логин:пароль или используйте /send для чата с продавцом."
+        )
         return
     context.user_data["pending_credentials"] = credentials
     context.user_data["pending_chat_id"] = context.user_data.get("last_relay_chat_id")
     await update.message.reply_text(
-        f"Confirm credentials?\n{credentials}",
+        f"Подтвердить данные?\n{credentials}",
         reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Confirm", callback_data="confirm_credentials")]]
+            [[InlineKeyboardButton("Подтвердить", callback_data="confirm_credentials")]]
         ),
     )
 
@@ -135,25 +163,25 @@ async def confirm_credentials(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     await query.answer()
     if not await db.is_allowed_user(query.from_user.id):
-        await query.edit_message_text("Access denied.")
+        await query.edit_message_text("Доступ запрещен.")
         return
     credentials = context.user_data.get("pending_credentials")
     if not credentials:
-        await query.edit_message_text("No pending credentials.")
+        await query.edit_message_text("Нет ожидающих подтверждения данных.")
         return
     chat_id = context.user_data.get("pending_chat_id")
     account_id = await db.confirm_account(query.from_user.id, credentials, chat_id)
     context.user_data.pop("pending_credentials", None)
     context.user_data.pop("pending_chat_id", None)
-    await query.edit_message_text(f"Saved account {account_id}.")
+    await query.edit_message_text(f"Аккаунт {account_id} сохранен.")
 
 
 async def post_init(application: Application) -> None:
     global _poller_task
     await db.connect()
-    logger.info("telegram bot database connected")
+    logger.info("База данных Telegram-бота подключена")
     _poller_task = asyncio.create_task(poll_funpay_messages(application.bot))
-    logger.info("poller background task started")
+    logger.info("Фоновая задача опроса запущена")
 
 
 async def post_shutdown(application: Application) -> None:
@@ -169,7 +197,9 @@ async def post_shutdown(application: Application) -> None:
 
 def main() -> None:
     if not settings.telegram_bot_token:
-        raise RuntimeError("TELEGRAM_BOT_TOKEN is required")
+        logger.warning("TELEGRAM_BOT_TOKEN не настроен; Telegram-бот отключен")
+        asyncio.run(asyncio.Event().wait())
+        return
 
     application = (
         Application.builder()
@@ -189,4 +219,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
