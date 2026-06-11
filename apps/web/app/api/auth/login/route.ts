@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
@@ -19,14 +20,28 @@ type LoginUser = {
   role: "admin" | "manager";
 };
 
+/**
+ * A throwaway bcrypt hash compared against when the requested account does not
+ * exist, so the response time of a missing account matches that of a wrong
+ * password. This prevents distinguishing registered emails by timing.
+ */
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(randomBytes(32).toString("hex"), 12);
+
+/**
+ * Creates the configured bootstrap admin the first time the system is used.
+ * Idempotent and race-safe: only attempted when no users exist yet, and the
+ * insert is a no-op if another concurrent request already created the account.
+ */
 async function ensureBootstrapAdmin(email: string, password: string) {
-  const existing = await query<{ count: string }>("SELECT count(*) FROM users");
-  if (Number(existing[0]?.count ?? 0) > 0) {
+  const existing = await query<{ exists: number }>("SELECT 1 AS exists FROM users LIMIT 1");
+  if (existing.length > 0) {
     return;
   }
   const hash = await bcrypt.hash(password, 12);
   await query(
-    "INSERT INTO users (email, password_hash, role, display_name) VALUES ($1, $2, 'admin', 'Admin')",
+    `INSERT INTO users (email, password_hash, role, display_name)
+     VALUES ($1, $2, 'admin', 'Admin')
+     ON CONFLICT (email) DO NOTHING`,
     [email, hash]
   );
 }
@@ -39,7 +54,11 @@ export async function POST(request: Request) {
 
   const bootstrapEmail = process.env.BOOTSTRAP_ADMIN_EMAIL;
   const bootstrapPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD;
-  if (bootstrapEmail && bootstrapPassword) {
+  if (
+    bootstrapEmail &&
+    bootstrapPassword &&
+    parsed.data.email.toLowerCase() === bootstrapEmail.toLowerCase()
+  ) {
     await ensureBootstrapAdmin(bootstrapEmail, bootstrapPassword);
   }
 
@@ -48,7 +67,13 @@ export async function POST(request: Request) {
     [parsed.data.email]
   );
   const user = rows[0];
-  if (!user || !(await bcrypt.compare(parsed.data.password, user.password_hash))) {
+  // Always run a comparison (against a dummy hash when the user is missing) so
+  // the timing of unknown emails matches that of wrong passwords.
+  const passwordMatches = await bcrypt.compare(
+    parsed.data.password,
+    user?.password_hash ?? DUMMY_PASSWORD_HASH
+  );
+  if (!user || !passwordMatches) {
     return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
   }
 
