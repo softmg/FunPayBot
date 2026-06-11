@@ -21,6 +21,11 @@ type PaymentNotification = {
   paymentDetails?: PaymentDetails | null;
 };
 
+type TelegramNotificationSettings = {
+  token: string;
+  adminIds: Set<string>;
+};
+
 function extractError(payload: unknown, fallback: string) {
   if (payload && typeof payload === "object" && "detail" in payload && typeof payload.detail === "string") {
     return payload.detail;
@@ -40,8 +45,30 @@ function parseAdminTelegramIds() {
   );
 }
 
-async function getPaymentNotificationRecipients() {
-  const configuredIds = parseAdminTelegramIds();
+async function getTelegramNotificationSettings(): Promise<TelegramNotificationSettings> {
+  const settings = new Map<string, string>();
+  const rows = await query<{ key: string; value: string }>(
+    "SELECT key, value FROM settings WHERE key = ANY($1::text[])",
+    [["telegram_bot_token", "admin_telegram_ids"]]
+  );
+
+  for (const row of rows) {
+    settings.set(row.key, row.value);
+  }
+
+  const token = settings.get("telegram_bot_token")?.trim() || process.env.TELEGRAM_BOT_TOKEN || "";
+  const adminIds = parseAdminTelegramIds();
+  for (const value of (settings.get("admin_telegram_ids") ?? "").split(",")) {
+    const normalized = value.trim();
+    if (normalized) {
+      adminIds.add(normalized);
+    }
+  }
+
+  return { token, adminIds };
+}
+
+async function getPaymentNotificationRecipients(configuredIds: Set<string>) {
   const rows = await query<{ telegram_user_id: string | number | null }>(
     "SELECT telegram_user_id FROM users WHERE role = 'admin' AND is_active = TRUE AND telegram_user_id IS NOT NULL",
     []
@@ -82,8 +109,8 @@ function formatPaymentNotification(payment: PaymentNotification, lotUrl: string,
 }
 
 async function notifyPayment(payment: PaymentNotification, lotUrl: string, orderId: string) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  const recipients = await getPaymentNotificationRecipients();
+  const { token, adminIds } = await getTelegramNotificationSettings();
+  const recipients = await getPaymentNotificationRecipients(adminIds);
   if (!token || recipients.length === 0) {
     return { notified: false, reason: "telegram_not_configured" };
   }

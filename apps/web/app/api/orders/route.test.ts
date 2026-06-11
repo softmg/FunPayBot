@@ -86,6 +86,7 @@ describe("orders route", () => {
       .mockResolvedValueOnce([{ id: "order-1" }])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
 
     const response = await POST(jsonRequest({ lot_url: "https://funpay.com/lots/1355/1/", payment_method_id: "42" }));
@@ -101,7 +102,7 @@ describe("orders route", () => {
       ["https://funpay.com/lots/1355/1/", "payment_pending", "https://funpay.com/pay/abc", "user-1"]
     );
     expect(mockedQuery).toHaveBeenNthCalledWith(
-      4,
+      5,
       expect.stringContaining("order.payment_link_notification"),
       expect.arrayContaining(["user-1", "order-1"])
     );
@@ -116,6 +117,7 @@ describe("orders route", () => {
       .mockResolvedValueOnce(Response.json({ ok: true }, { status: 200 })) as unknown as typeof fetch;
     mockedQuery
       .mockResolvedValueOnce([{ id: "order-1" }])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ telegram_user_id: "2002" }])
       .mockResolvedValueOnce([]);
@@ -135,6 +137,45 @@ describe("orders route", () => {
     expect(globalThis.fetch).toHaveBeenCalledTimes(3);
   });
 
+  it("uses Telegram settings saved from the admin panel", async () => {
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(Response.json({ payment_link: "https://funpay.com/pay/abc" }, { status: 200 }))
+      .mockResolvedValueOnce(Response.json({ ok: true }, { status: 200 }))
+      .mockResolvedValueOnce(Response.json({ ok: true }, { status: 200 }))
+      .mockResolvedValueOnce(Response.json({ ok: true }, { status: 200 })) as unknown as typeof fetch;
+    mockedQuery
+      .mockResolvedValueOnce([{ id: "order-1" }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { key: "telegram_bot_token", value: "settings-token" },
+        { key: "admin_telegram_ids", value: "3003, 4004" }
+      ])
+      .mockResolvedValueOnce([{ telegram_user_id: "5005" }])
+      .mockResolvedValueOnce([]);
+
+    const response = await POST(jsonRequest({ lot_url: "https://funpay.com/lots/1355/1/", payment_method_id: "42" }));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ telegram_notified: true });
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      2,
+      "https://api.telegram.org/botsettings-token/sendMessage",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining("\"chat_id\":\"3003\"")
+      })
+    );
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      4,
+      "https://api.telegram.org/botsettings-token/sendMessage",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining("\"chat_id\":\"5005\"")
+      })
+    );
+    expect(globalThis.fetch).toHaveBeenCalledTimes(4);
+  });
+
   it("sends crypto payment details to Telegram admins", async () => {
     process.env.TELEGRAM_BOT_TOKEN = "telegram-token";
     process.env.ADMIN_TELEGRAM_IDS = "1001";
@@ -151,6 +192,7 @@ describe("orders route", () => {
       .mockResolvedValueOnce(Response.json({ ok: true }, { status: 200 })) as unknown as typeof fetch;
     mockedQuery
       .mockResolvedValueOnce([{ id: "order-1" }])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
@@ -183,6 +225,7 @@ describe("orders route", () => {
       .mockRejectedValueOnce(new DOMException("The operation was aborted", "AbortError")) as unknown as typeof fetch;
     mockedQuery
       .mockResolvedValueOnce([{ id: "order-1" }])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
