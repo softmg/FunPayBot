@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     funpay_golden_key: str = ""
     funpay_user_agent: str | None = None
     funpay_max_actions_per_minute: int = 100
+    # Shared secret required on every request (except /health). When empty the
+    # API is unprotected; this is logged loudly at startup.
+    internal_api_token: str = ""
 
 
 settings = Settings()

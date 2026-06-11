@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.main import app
 
 client = TestClient(app)
@@ -12,6 +13,37 @@ def test_health_returns_ok() -> None:
     assert response.status_code == 200
     data = response.json()
     assert data["ok"] is True
+
+
+def test_health_open_even_when_token_configured(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "internal_api_token", "s3cret")
+    response = client.get("/health")
+    assert response.status_code == 200
+
+
+@patch("app.main.search_lots", new_callable=AsyncMock)
+def test_protected_route_rejects_missing_token(mock_search: AsyncMock, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "internal_api_token", "s3cret")
+    response = client.post("/lots/search", json={"query": "test"})
+    assert response.status_code == 401
+    mock_search.assert_not_awaited()
+
+
+@patch("app.main.search_lots", new_callable=AsyncMock)
+def test_protected_route_rejects_wrong_token(mock_search: AsyncMock, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "internal_api_token", "s3cret")
+    response = client.post("/lots/search", json={"query": "test"}, headers={"X-Internal-Token": "nope"})
+    assert response.status_code == 401
+    mock_search.assert_not_awaited()
+
+
+@patch("app.main.search_lots", new_callable=AsyncMock)
+def test_protected_route_accepts_valid_token(mock_search: AsyncMock, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "internal_api_token", "s3cret")
+    mock_search.return_value = []
+    response = client.post("/lots/search", json={"query": "test"}, headers={"X-Internal-Token": "s3cret"})
+    assert response.status_code == 200
+    mock_search.assert_awaited_once()
 
 
 @patch("app.main.search_lots", new_callable=AsyncMock)

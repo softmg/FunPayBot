@@ -3,6 +3,7 @@ import { z } from "zod";
 import { withApiErrors } from "@/lib/api";
 import { requireUserApi } from "@/lib/auth";
 import { query } from "@/lib/db";
+import { funpayHeaders } from "@/lib/funpay";
 
 const schema = z.object({
   message: z.string().min(1).max(2000),
@@ -37,7 +38,7 @@ export const POST = withApiErrors(async (request: Request, { params }: Params) =
 
   const response = await fetch(`${process.env.FUNPAY_API_URL}/chats/send`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: funpayHeaders({ "content-type": "application/json" }),
     body: JSON.stringify({ chat_id: funpayChatId, body: parsed.data.message }),
     cache: "no-store",
   });

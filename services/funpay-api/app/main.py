@@ -1,11 +1,14 @@
 import json
+import logging
+import secrets
 from decimal import Decimal
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from app.config import settings
 from app.funpay_client import (
     FunPayNotConfiguredError,
     FunPayPurchaseFlowError,
@@ -15,7 +18,34 @@ from app.funpay_client import (
 )
 from app.parser import FunPayUpstreamTimeoutError, LotSearchFilters, fetch_funpay_warranty, search_lots
 
-app = FastAPI(title="FunPayBot API", version="0.1.0")
+logger = logging.getLogger(__name__)
+
+if not settings.internal_api_token:
+    logger.warning(
+        "INTERNAL_API_TOKEN is not set: the FunPay API is unauthenticated. "
+        "Set it (and configure callers) before exposing this service."
+    )
+
+
+async def require_internal_token(
+    request: Request,
+    x_internal_token: str | None = Header(default=None),
+) -> None:
+    """Reject requests that do not present the shared internal token.
+
+    The public health check is always allowed. When no token is configured the
+    service runs unprotected (a warning is emitted at startup).
+    """
+    if request.url.path == "/health":
+        return
+    expected = settings.internal_api_token
+    if not expected:
+        return
+    if not x_internal_token or not secrets.compare_digest(x_internal_token, expected):
+        raise HTTPException(status_code=401, detail="Invalid or missing internal API token")
+
+
+app = FastAPI(title="FunPayBot API", version="0.1.0", dependencies=[Depends(require_internal_token)])
 
 
 class LotSearchRequest(BaseModel):

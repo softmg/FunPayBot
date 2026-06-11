@@ -35,7 +35,11 @@ async def _poll_once(bot) -> None:
     async with httpx.AsyncClient(timeout=20) as client:
         try:
             account_id = await _get_funpay_account_id(client)
-            response = await client.get(f"{settings.funpay_api_url}/chats", params={"update": "true"})
+            response = await client.get(
+                f"{settings.funpay_api_url}/chats",
+                params={"update": "true"},
+                headers=settings.internal_headers(),
+            )
         except httpx.TimeoutException as exc:
             logger.warning("Таймаут при получении списка чатов: %s", exc)
             return
@@ -74,7 +78,10 @@ async def _get_funpay_account_id(client: httpx.AsyncClient) -> int | None:
     global _funpay_account_id
     if _funpay_account_id is not None:
         return _funpay_account_id
-    response = await client.get(f"{settings.funpay_api_url}/session/status")
+    response = await client.get(
+        f"{settings.funpay_api_url}/session/status",
+        headers=settings.internal_headers(),
+    )
     if not response.is_success:
         logger.warning("Не удалось получить статус FunPay-сессии: %s", response.status_code)
         return None
@@ -101,7 +108,11 @@ async def _fetch_and_relay_new_messages(
 
     async with httpx.AsyncClient(timeout=20) as client:
         try:
-            response = await client.get(f"{settings.funpay_api_url}/chats/{funpay_chat_id}/history", params=params)
+            response = await client.get(
+                f"{settings.funpay_api_url}/chats/{funpay_chat_id}/history",
+                params=params,
+                headers=settings.internal_headers(),
+            )
         except httpx.TimeoutException as exc:
             logger.warning("Таймаут при получении истории чата %s: %s", funpay_chat_id, exc)
             return

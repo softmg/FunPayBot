@@ -83,6 +83,7 @@ async def send_to_seller(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         response = await client.post(
             f"{settings.funpay_api_url}/chats/send",
             json={"chat_id": chat_id, "body": body},
+            headers=settings.internal_headers(),
         )
     if not response.is_success:
         await update.effective_chat.send_message("Не удалось отправить сообщение.")

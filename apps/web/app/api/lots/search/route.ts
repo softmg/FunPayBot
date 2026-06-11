@@ -4,6 +4,7 @@ import { withApiErrors } from "@/lib/api";
 import { requireUserApi } from "@/lib/auth";
 import { query } from "@/lib/db";
 import { fetchWithTimeout, FUNPAY_SEARCH_TIMEOUT_MS, UpstreamTimeoutError } from "@/lib/fetch-timeout";
+import { funpayHeaders } from "@/lib/funpay";
 
 const schema = z.object({
   query: z.string().default(""),
@@ -54,7 +55,7 @@ export const POST = withApiErrors(async (request: Request) => {
       `${process.env.FUNPAY_API_URL}/lots/search`,
       {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: funpayHeaders({ "content-type": "application/json" }),
         body: JSON.stringify({ ...parsed.data, forbidden_words: mergedForbidden }),
         cache: "no-store"
       },

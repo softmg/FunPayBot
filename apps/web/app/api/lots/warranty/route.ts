@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withApiErrors } from "@/lib/api";
 import { requireUserApi } from "@/lib/auth";
+import { funpayHeaders } from "@/lib/funpay";
 
 const schema = z.object({
   url: z.string().url(),
@@ -35,6 +36,7 @@ export const POST = withApiErrors(async (request: Request) => {
   }
 
   const response = await fetch(`${process.env.FUNPAY_API_URL}/lots/warranty?${params.toString()}`, {
+    headers: funpayHeaders(),
     cache: "no-store"
   });
   const payload = await response.json().catch(() => null);
