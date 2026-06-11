@@ -64,6 +64,35 @@ export const PATCH = withApiErrors(async (request: Request) => {
     return NextResponse.json({ error: "Invalid update payload", details: parsed.error.flatten() }, { status: 400 });
   }
 
+  // Guard against locking everyone out: an update that deactivates an account or
+  // demotes it from admin removes admin access.
+  const removesAdminAccess = parsed.data.is_active === false || parsed.data.role === "manager";
+  if (removesAdminAccess) {
+    if (parsed.data.id === admin.id) {
+      return NextResponse.json(
+        { error: "You cannot deactivate or demote your own account" },
+        { status: 400 }
+      );
+    }
+
+    const target = await query<{ role: string; is_active: boolean }>(
+      "SELECT role, is_active FROM users WHERE id = $1",
+      [parsed.data.id]
+    );
+    if (target.length === 0) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+    if (target[0].role === "admin" && target[0].is_active) {
+      const otherAdmins = await query<{ count: string }>(
+        "SELECT count(*) FROM users WHERE role = 'admin' AND is_active = TRUE AND id <> $1",
+        [parsed.data.id]
+      );
+      if (Number(otherAdmins[0]?.count ?? 0) === 0) {
+        return NextResponse.json({ error: "Cannot remove the last active admin" }, { status: 400 });
+      }
+    }
+  }
+
   const updates: string[] = [];
   const params: unknown[] = [];
   let paramIdx = 1;
