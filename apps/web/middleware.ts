@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSessionSecret, SESSION_COOKIE, SESSION_MAX_AGE_MS } from "./lib/session-config";
 
 const PUBLIC_PATHS = ["/login", "/api/auth/login"];
-const SESSION_COOKIE = "funpaybot_user";
-const SECRET = process.env.NEXTAUTH_SECRET ?? "dev-fallback-secret";
-const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 function bytesToHex(bytes: ArrayBuffer): string {
   return Array.from(new Uint8Array(bytes))
@@ -15,7 +13,7 @@ async function hmac(data: string): Promise<string> {
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
-    encoder.encode(SECRET),
+    encoder.encode(getSessionSecret()),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"]

@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { query } from "./db";
 import { verifySession } from "./session";
+import { SESSION_COOKIE } from "./session-config";
 
 export type Role = "admin" | "manager";
 
@@ -12,7 +13,7 @@ export type CurrentUser = {
   display_name: string;
 };
 
-const sessionCookie = "funpaybot_user";
+const sessionCookie = SESSION_COOKIE;
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const cookieStore = await cookies();

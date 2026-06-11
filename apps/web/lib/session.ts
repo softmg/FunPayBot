@@ -1,10 +1,8 @@
 import { createHmac, timingSafeEqual } from "crypto";
-
-const SECRET = process.env.NEXTAUTH_SECRET ?? "dev-fallback-secret";
-const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+import { getSessionSecret, SESSION_MAX_AGE_MS } from "./session-config";
 
 function hmac(data: string): string {
-  return createHmac("sha256", SECRET).update(data).digest("hex");
+  return createHmac("sha256", getSessionSecret()).update(data).digest("hex");
 }
 
 /**

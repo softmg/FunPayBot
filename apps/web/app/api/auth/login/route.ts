@@ -5,6 +5,7 @@ import { z } from "zod";
 import { sessionCookie } from "@/lib/auth";
 import { query } from "@/lib/db";
 import { signSession } from "@/lib/session";
+import { SESSION_MAX_AGE_SECONDS } from "@/lib/session-config";
 
 const schema = z.object({
   email: z.string().email(),
@@ -56,7 +57,8 @@ export async function POST(request: Request) {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
-    path: "/"
+    path: "/",
+    maxAge: SESSION_MAX_AGE_SECONDS
   });
 
   return NextResponse.json({ ok: true, role: user.role });
