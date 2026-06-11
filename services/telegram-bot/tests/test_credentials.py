@@ -20,3 +20,14 @@ def test_extract_credentials_from_funpay_code_site_message() -> None:
 
 def test_extract_credentials_returns_none_for_plain_text() -> None:
     assert extract_credentials("hello, when can you deliver?") is None
+
+
+def test_extract_credentials_ignores_email_mentioned_in_a_sentence() -> None:
+    # A bare space after an email is not a credential delimiter.
+    assert extract_credentials("write to user@mail.com today please") is None
+    assert extract_credentials("контакт support@shop.com спасибо") is None
+
+
+def test_extract_credentials_accepts_explicit_delimiters() -> None:
+    assert extract_credentials("user@example.com | secretpw") == "user@example.com:secretpw"
+    assert extract_credentials("user@example.com/secretpw") == "user@example.com:secretpw"

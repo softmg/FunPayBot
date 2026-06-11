@@ -3,7 +3,9 @@ import re
 
 credential_patterns = [
     re.compile(r"(?P<login>[\w.+-]+@[\w.-]+\.\w+)\s*-{2,}\s*(?P<password>\S{4,})", re.IGNORECASE),
-    re.compile(r"(?P<login>[\w.+-]+@[\w.-]+\.\w+)\s*[:;|/ ]\s*(?P<password>\S{4,})", re.IGNORECASE),
+    # Require an explicit delimiter (: ; | /). A bare space is intentionally not
+    # accepted: "write to user@mail.com today" must not parse as email:today.
+    re.compile(r"(?P<login>[\w.+-]+@[\w.-]+\.\w+)\s*[:;|/]\s*(?P<password>\S{4,})", re.IGNORECASE),
     re.compile(r"(?:login|логин)\s*[:\-]\s*(?P<login>\S+).{0,40}(?:pass|password|пароль)\s*[:\-]\s*(?P<password>\S+)", re.IGNORECASE | re.DOTALL),
 ]
 
