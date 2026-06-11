@@ -52,27 +52,44 @@ async def _poll_once(bot) -> None:
     chats = response.json().get("chats", [])
 
     for chat in chats:
-        chat_id = chat.get("id")
-        chat_name = chat.get("name")
-        if chat_id is None:
-            continue
+        try:
+            await _process_chat(bot, chat, account_id)
+        except Exception:
+            logger.exception("Сбой обработки чата %s", chat.get("id"))
 
-        funpay_chat_id = str(chat_id)
-        internal_chat_id = await db.ensure_chat(funpay_chat_id, chat_name)
 
-        manager_tg_id = await db.get_manager_telegram_id_for_chat(funpay_chat_id)
+async def _process_chat(bot, chat: dict, account_id: int | None) -> None:
+    chat_id = chat.get("id")
+    chat_name = chat.get("name")
+    if chat_id is None:
+        return
+
+    funpay_chat_id = str(chat_id)
+    internal_chat_id = await db.ensure_chat(funpay_chat_id, chat_name)
+
+    manager_tg_id = await db.get_manager_telegram_id_for_chat(funpay_chat_id)
+    if manager_tg_id is None:
+        manager_tg_id = await db.assign_chat_to_pending_order(funpay_chat_id, internal_chat_id)
         if manager_tg_id is None:
-            manager_tg_id = await db.assign_chat_to_pending_order(funpay_chat_id, internal_chat_id)
-            if manager_tg_id is None:
-                continue
+            return
 
-        watermark = await db.get_watermark(funpay_chat_id)
-        node_msg_id = chat.get("node_msg_id")
+    watermark = await db.get_watermark(funpay_chat_id)
+    node_msg_id = _as_int(chat.get("node_msg_id"))
 
-        if watermark is not None and node_msg_id is not None and int(node_msg_id) <= watermark:
-            continue
+    if watermark is not None and node_msg_id is not None and node_msg_id <= watermark:
+        return
 
-        await _fetch_and_relay_new_messages(bot, internal_chat_id, funpay_chat_id, chat_name, manager_tg_id, watermark, account_id)
+    await _fetch_and_relay_new_messages(bot, internal_chat_id, funpay_chat_id, chat_name, manager_tg_id, watermark, account_id)
+
+
+def _as_int(value) -> int | None:
+    """Parse a FunPay id to int, tolerating missing or non-numeric values."""
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 async def _get_funpay_account_id(client: httpx.AsyncClient) -> int | None:
@@ -129,7 +146,8 @@ async def _fetch_and_relay_new_messages(
         if msg_id is None:
             continue
 
-        if watermark is not None and int(msg_id) <= watermark:
+        numeric_msg_id = _as_int(msg_id)
+        if watermark is not None and numeric_msg_id is not None and numeric_msg_id <= watermark:
             continue
 
         text = msg.get("text", "")
@@ -145,7 +163,7 @@ async def _fetch_and_relay_new_messages(
             can_capture_delivery = (
                 text.strip()
                 and author.lower() != "funpay"
-                and (account_id is None or author_id is None or int(author_id) != account_id)
+                and (account_id is None or _as_int(author_id) != account_id)
             )
             if can_capture_delivery:
                 raw_token = create_pending_credentials(manager_tg_id, text.strip(), internal_chat_id)

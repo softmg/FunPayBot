@@ -310,3 +310,68 @@ async def test_poll_once_handles_timeout(mock_client_class, mock_db) -> None:
     await _poll_once(bot)
 
     bot.send_message.assert_not_called()
+
+
+@pytest.mark.asyncio
+@patch("bot.poller.db")
+@patch("bot.poller.httpx.AsyncClient")
+async def test_poll_once_isolates_chat_failures(mock_client_class, mock_db) -> None:
+    """A failure processing one chat must not abort the rest of the cycle."""
+    chats_response = MagicMock(
+        is_success=True,
+        json=lambda: {
+            "chats": [
+                {"id": 1, "name": "bad", "node_msg_id": 5},
+                {"id": 2, "name": "good", "node_msg_id": 5},
+            ]
+        },
+    )
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.get = AsyncMock(side_effect=[session_response(), chats_response])
+    mock_client_class.return_value = mock_client
+
+    async def ensure_chat(funpay_chat_id, name=None):
+        if funpay_chat_id == "1":
+            raise RuntimeError("boom")
+        return "internal-uuid-2"
+
+    mock_db.ensure_chat = AsyncMock(side_effect=ensure_chat)
+    mock_db.get_manager_telegram_id_for_chat = AsyncMock(return_value=None)
+    mock_db.assign_chat_to_pending_order = AsyncMock(return_value=None)
+
+    bot = MagicMock()
+    await _poll_once(bot)
+
+    assert any(call.args[0] == "2" for call in mock_db.ensure_chat.call_args_list)
+
+
+@pytest.mark.asyncio
+@patch("bot.poller.db")
+@patch("bot.poller.httpx.AsyncClient")
+async def test_poll_once_tolerates_non_numeric_message_ids(mock_client_class, mock_db) -> None:
+    chats_response = MagicMock(
+        is_success=True,
+        json=lambda: {"chats": [{"id": 800, "name": "seller8", "node_msg_id": "abc"}]},
+    )
+    history_response = MagicMock(
+        is_success=True,
+        json=lambda: {"messages": [{"id": "x9", "text": "hello", "author": "seller8"}]},
+    )
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.get = AsyncMock(side_effect=[session_response(), chats_response, history_response])
+    mock_client_class.return_value = mock_client
+
+    mock_db.ensure_chat = AsyncMock(return_value="internal-uuid")
+    mock_db.get_manager_telegram_id_for_chat = AsyncMock(return_value=88888)
+    mock_db.get_watermark = AsyncMock(return_value=None)
+    mock_db.save_inbound_message = AsyncMock()
+
+    bot = AsyncMock()
+    await _poll_once(bot)
+
+    mock_db.save_inbound_message.assert_called_once_with("internal-uuid", "x9", "seller8", "hello")
+    bot.send_message.assert_called_once()
