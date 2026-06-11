@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireAdmin } from "@/lib/auth";
+import { withApiErrors } from "@/lib/api";
+import { requireAdminApi } from "@/lib/auth";
 import { query } from "@/lib/db";
 
 const SENSITIVE_KEYS = new Set(["funpay_golden_key", "telegram_bot_token"]);
@@ -16,8 +17,8 @@ function maskValue(key: string, value: string): string {
   return value;
 }
 
-export async function GET() {
-  await requireAdmin();
+export const GET = withApiErrors(async () => {
+  await requireAdminApi();
   const rows = await query<{ key: string; value: string; updated_at: string }>(
     "SELECT key, value, updated_at FROM settings ORDER BY key"
   );
@@ -29,10 +30,10 @@ export async function GET() {
     };
   }
   return NextResponse.json({ settings });
-}
+});
 
-export async function PUT(request: Request) {
-  const admin = await requireAdmin();
+export const PUT = withApiErrors(async (request: Request) => {
+  const admin = await requireAdminApi();
   const parsed = updateSchema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid settings payload" }, { status: 400 });
@@ -55,4 +56,4 @@ export async function PUT(request: Request) {
   );
 
   return NextResponse.json({ ok: true, updated: changedKeys });
-}
+});

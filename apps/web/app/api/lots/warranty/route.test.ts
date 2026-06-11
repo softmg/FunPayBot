@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { requireUser } from "@/lib/auth";
+import { requireUserApi } from "@/lib/auth";
 import { POST } from "./route";
 
 vi.mock("@/lib/auth", () => ({
-  requireUser: vi.fn()
+  requireUserApi: vi.fn()
 }));
 
-const mockedRequireUser = vi.mocked(requireUser);
+const mockedRequireUser = vi.mocked(requireUserApi);
 
 function jsonRequest(body: unknown) {
   return new Request("http://localhost/api/lots/warranty", {

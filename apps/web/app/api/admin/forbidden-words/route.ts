@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireAdmin } from "@/lib/auth";
+import { withApiErrors } from "@/lib/api";
+import { requireAdminApi } from "@/lib/auth";
 import { query } from "@/lib/db";
 
 const addSchema = z.object({
@@ -11,14 +12,14 @@ const deleteSchema = z.object({
   id: z.string().uuid(),
 });
 
-export async function GET() {
-  await requireAdmin();
+export const GET = withApiErrors(async () => {
+  await requireAdminApi();
   const words = await query("SELECT id, word, created_at FROM forbidden_words ORDER BY word");
   return NextResponse.json({ words });
-}
+});
 
-export async function POST(request: Request) {
-  const admin = await requireAdmin();
+export const POST = withApiErrors(async (request: Request) => {
+  const admin = await requireAdminApi();
   const parsed = addSchema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
@@ -41,10 +42,10 @@ export async function POST(request: Request) {
   );
 
   return NextResponse.json({ id: rows[0].id }, { status: 201 });
-}
+});
 
-export async function DELETE(request: Request) {
-  const admin = await requireAdmin();
+export const DELETE = withApiErrors(async (request: Request) => {
+  const admin = await requireAdminApi();
   const parsed = deleteSchema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
@@ -64,4 +65,4 @@ export async function DELETE(request: Request) {
   );
 
   return NextResponse.json({ ok: true });
-}
+});

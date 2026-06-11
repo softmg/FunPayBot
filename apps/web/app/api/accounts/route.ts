@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { withApiErrors } from "@/lib/api";
+import { requireUserApi } from "@/lib/auth";
 import { query } from "@/lib/db";
 
 const createSchema = z.object({
@@ -25,14 +26,14 @@ const listSql = `
   LIMIT 100
 `;
 
-export async function GET() {
-  await requireUser();
+export const GET = withApiErrors(async () => {
+  await requireUserApi();
   const accounts = await query(listSql);
   return NextResponse.json({ accounts });
-}
+});
 
-export async function POST(request: Request) {
-  const user = await requireUser();
+export const POST = withApiErrors(async (request: Request) => {
+  const user = await requireUserApi();
   const parsed = createSchema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid account payload" }, { status: 400 });
@@ -48,5 +49,5 @@ export async function POST(request: Request) {
   );
 
   return NextResponse.json({ id: rows[0].id }, { status: 201 });
-}
+});
 

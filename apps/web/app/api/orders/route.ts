@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { withApiErrors } from "@/lib/api";
+import { requireUserApi } from "@/lib/auth";
 import { query } from "@/lib/db";
 import { fetchWithTimeout, TELEGRAM_API_TIMEOUT_MS, UpstreamTimeoutError } from "@/lib/fetch-timeout";
 
@@ -150,8 +151,8 @@ async function notifyPayment(payment: PaymentNotification, lotUrl: string, order
   };
 }
 
-export async function POST(request: Request) {
-  const user = await requireUser();
+export const POST = withApiErrors(async (request: Request) => {
+  const user = await requireUserApi();
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid order payload" }, { status: 400 });
@@ -238,4 +239,4 @@ export async function POST(request: Request) {
   );
 
   return NextResponse.json({ ...payload, id: rows[0].id, telegram_notified: telegram.notified });
-}
+});

@@ -1,7 +1,8 @@
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireAdmin } from "@/lib/auth";
+import { withApiErrors } from "@/lib/api";
+import { requireAdminApi } from "@/lib/auth";
 import { query } from "@/lib/db";
 
 const createSchema = z.object({
@@ -21,16 +22,16 @@ const updateSchema = z.object({
   password: z.string().min(6).optional(),
 });
 
-export async function GET() {
-  await requireAdmin();
+export const GET = withApiErrors(async () => {
+  await requireAdminApi();
   const users = await query(
     "SELECT id, email, role, display_name, telegram_user_id, is_active, created_at FROM users ORDER BY created_at"
   );
   return NextResponse.json({ users });
-}
+});
 
-export async function POST(request: Request) {
-  const admin = await requireAdmin();
+export const POST = withApiErrors(async (request: Request) => {
+  const admin = await requireAdminApi();
   const parsed = createSchema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid user payload", details: parsed.error.flatten() }, { status: 400 });
@@ -54,10 +55,10 @@ export async function POST(request: Request) {
   );
 
   return NextResponse.json({ id: rows[0].id }, { status: 201 });
-}
+});
 
-export async function PATCH(request: Request) {
-  const admin = await requireAdmin();
+export const PATCH = withApiErrors(async (request: Request) => {
+  const admin = await requireAdminApi();
   const parsed = updateSchema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid update payload", details: parsed.error.flatten() }, { status: 400 });
@@ -106,4 +107,4 @@ export async function PATCH(request: Request) {
   );
 
   return NextResponse.json({ ok: true });
-}
+});

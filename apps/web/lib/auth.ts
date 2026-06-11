@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { ApiError } from "./api";
 import { query } from "./db";
 import { verifySession } from "./session";
 import { SESSION_COOKIE } from "./session-config";
@@ -46,6 +47,31 @@ export async function requireAdmin(): Promise<CurrentUser> {
   const user = await requireUser();
   if (user.role !== "admin") {
     redirect("/");
+  }
+  return user;
+}
+
+/**
+ * Like {@link requireUser} but for API route handlers: throws an
+ * {@link ApiError} (401) instead of redirecting to the login page, so API
+ * clients receive a proper status code rather than an HTML redirect.
+ */
+export async function requireUserApi(): Promise<CurrentUser> {
+  const user = await getCurrentUser();
+  if (!user) {
+    throw new ApiError(401, "Unauthorized");
+  }
+  return user;
+}
+
+/**
+ * Like {@link requireAdmin} but for API route handlers: throws 401 when not
+ * authenticated and 403 when authenticated without the admin role.
+ */
+export async function requireAdminApi(): Promise<CurrentUser> {
+  const user = await requireUserApi();
+  if (user.role !== "admin") {
+    throw new ApiError(403, "Forbidden");
   }
   return user;
 }

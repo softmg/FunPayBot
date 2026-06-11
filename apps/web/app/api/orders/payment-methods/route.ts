@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { withApiErrors } from "@/lib/api";
+import { requireUserApi } from "@/lib/auth";
 import { query } from "@/lib/db";
 import { fetchWithTimeout, UpstreamTimeoutError } from "@/lib/fetch-timeout";
 
@@ -18,8 +19,8 @@ function extractError(payload: unknown, fallback: string) {
   return fallback;
 }
 
-export async function POST(request: Request) {
-  const user = await requireUser();
+export const POST = withApiErrors(async (request: Request) => {
+  const user = await requireUserApi();
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid payment methods payload" }, { status: 400 });
@@ -70,4 +71,4 @@ export async function POST(request: Request) {
   );
 
   return NextResponse.json(payload);
-}
+});

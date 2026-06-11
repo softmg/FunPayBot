@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { withApiErrors } from "@/lib/api";
+import { requireUserApi } from "@/lib/auth";
 import { query } from "@/lib/db";
 
 const schema = z.object({
@@ -9,8 +10,8 @@ const schema = z.object({
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function POST(request: Request, { params }: Params) {
-  const user = await requireUser();
+export const POST = withApiErrors(async (request: Request, { params }: Params) => {
+  const user = await requireUserApi();
   const { id } = await params;
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) {
@@ -51,4 +52,4 @@ export async function POST(request: Request, { params }: Params) {
   );
 
   return NextResponse.json({ ok: true });
-}
+});

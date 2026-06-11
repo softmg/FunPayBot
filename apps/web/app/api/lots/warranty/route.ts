@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { withApiErrors } from "@/lib/api";
+import { requireUserApi } from "@/lib/auth";
 
 const schema = z.object({
   url: z.string().url(),
@@ -17,8 +18,8 @@ function extractError(payload: unknown, fallback: string) {
   return fallback;
 }
 
-export async function POST(request: Request) {
-  await requireUser();
+export const POST = withApiErrors(async (request: Request) => {
+  await requireUserApi();
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid warranty payload" }, { status: 400 });
@@ -46,4 +47,4 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json(payload);
-}
+});
