@@ -16,6 +16,7 @@ from bot.config import settings
 from bot.credential_confirmations import pop_pending_credentials
 from bot.credentials import extract_credentials
 from bot.db import db
+from bot.last_chat import get_last_relay_chat
 from bot.poller import poll_funpay_messages
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -150,7 +151,7 @@ async def text_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
     context.user_data["pending_credentials"] = credentials
-    context.user_data["pending_chat_id"] = context.user_data.get("last_relay_chat_id")
+    context.user_data["pending_chat_id"] = get_last_relay_chat(update.effective_user.id)
     await update.message.reply_text(
         f"Подтвердить данные?\n{credentials}",
         reply_markup=InlineKeyboardMarkup(

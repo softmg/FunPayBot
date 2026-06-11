@@ -8,6 +8,7 @@ from bot.config import settings
 from bot.credential_confirmations import create_pending_credentials
 from bot.credentials import extract_credentials
 from bot.db import db
+from bot.last_chat import set_last_relay_chat
 
 logger = logging.getLogger(__name__)
 _funpay_account_id: int | None = None
@@ -136,6 +137,7 @@ async def _fetch_and_relay_new_messages(
         author_id = msg.get("author_id")
 
         await db.save_inbound_message(internal_chat_id, str(msg_id), author, text)
+        set_last_relay_chat(manager_tg_id, internal_chat_id)
 
         try:
             formatted = f"💬 *{_escape_md(chat_name or funpay_chat_id)}*\n{_escape_md(author)}: {_escape_md(text)}"
