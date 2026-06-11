@@ -79,7 +79,7 @@ async def _get_funpay_account_id(client: httpx.AsyncClient) -> int | None:
     if _funpay_account_id is not None:
         return _funpay_account_id
     response = await client.get(
-        f"{settings.funpay_api_url}/session/status",
+        f"{settings.funpay_api_url}/session",
         headers=settings.internal_headers(),
     )
     if not response.is_success:

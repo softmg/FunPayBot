@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 import bot.poller as poller_module
-from bot.poller import _poll_once, _escape_md
+from bot.poller import _get_funpay_account_id, _poll_once, _escape_md
 
 
 @pytest.fixture(autouse=True)
@@ -14,6 +14,18 @@ def reset_funpay_account_id_cache():
 
 def session_response() -> MagicMock:
     return MagicMock(is_success=True, json=lambda: {"id": 999})
+
+
+@pytest.mark.asyncio
+async def test_get_funpay_account_id_uses_session_endpoint() -> None:
+    client = AsyncMock()
+    client.get = AsyncMock(return_value=session_response())
+
+    account_id = await _get_funpay_account_id(client)
+
+    assert account_id == 999
+    requested_url = client.get.call_args.args[0]
+    assert requested_url.endswith("/session")
 
 
 @pytest.mark.asyncio
