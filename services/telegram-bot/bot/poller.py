@@ -10,6 +10,7 @@ from bot.credentials import extract_credentials
 from bot.db import db
 
 logger = logging.getLogger(__name__)
+_funpay_account_id: int | None = None
 
 
 async def poll_funpay_messages(bot) -> None:
@@ -33,6 +34,7 @@ async def _poll_once(bot) -> None:
     """Single poll iteration: fetch chats, detect new messages, relay to managers."""
     async with httpx.AsyncClient(timeout=20) as client:
         try:
+            account_id = await _get_funpay_account_id(client)
             response = await client.get(f"{settings.funpay_api_url}/chats", params={"update": "true"})
         except httpx.TimeoutException as exc:
             logger.warning("Таймаут при получении списка чатов: %s", exc)
@@ -65,7 +67,22 @@ async def _poll_once(bot) -> None:
         if watermark is not None and node_msg_id is not None and int(node_msg_id) <= watermark:
             continue
 
-        await _fetch_and_relay_new_messages(bot, internal_chat_id, funpay_chat_id, chat_name, manager_tg_id, watermark)
+        await _fetch_and_relay_new_messages(bot, internal_chat_id, funpay_chat_id, chat_name, manager_tg_id, watermark, account_id)
+
+
+async def _get_funpay_account_id(client: httpx.AsyncClient) -> int | None:
+    global _funpay_account_id
+    if _funpay_account_id is not None:
+        return _funpay_account_id
+    response = await client.get(f"{settings.funpay_api_url}/session/status")
+    if not response.is_success:
+        logger.warning("Не удалось получить статус FunPay-сессии: %s", response.status_code)
+        return None
+    account_id = response.json().get("id")
+    if account_id is None:
+        return None
+    _funpay_account_id = int(account_id)
+    return _funpay_account_id
 
 
 async def _fetch_and_relay_new_messages(
@@ -75,6 +92,7 @@ async def _fetch_and_relay_new_messages(
     chat_name: str | None,
     manager_tg_id: int,
     watermark: int | None,
+    account_id: int | None,
 ) -> None:
     """Fetch chat history and relay messages newer than the watermark."""
     params: dict = {"chat_id": funpay_chat_id}
@@ -104,20 +122,26 @@ async def _fetch_and_relay_new_messages(
 
         text = msg.get("text", "")
         author = msg.get("author", "Продавец")
+        author_id = msg.get("author_id")
 
         await db.save_inbound_message(internal_chat_id, str(msg_id), author, text)
 
         try:
             formatted = f"💬 *{_escape_md(chat_name or funpay_chat_id)}*\n{_escape_md(author)}: {_escape_md(text)}"
             buttons = []
-            if text.strip() and author.lower() != "funpay":
+            can_capture_delivery = (
+                text.strip()
+                and author.lower() != "funpay"
+                and (account_id is None or author_id is None or int(author_id) != account_id)
+            )
+            if can_capture_delivery:
                 raw_token = create_pending_credentials(manager_tg_id, text.strip(), internal_chat_id)
                 buttons.append(
                     [InlineKeyboardButton("Сохранить сообщение как аккаунт", callback_data=f"confirm_credentials:{raw_token}")]
                 )
 
             credentials = extract_credentials(text)
-            if credentials and credentials != text.strip():
+            if can_capture_delivery and credentials and credentials != text.strip():
                 parsed_token = create_pending_credentials(manager_tg_id, credentials, internal_chat_id)
                 formatted = (
                     f"{formatted}\n\n"
