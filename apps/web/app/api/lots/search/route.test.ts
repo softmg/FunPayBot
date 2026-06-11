@@ -50,6 +50,26 @@ describe("lots search route", () => {
     await expect(response.json()).resolves.toEqual({ error: "Timed out while fetching FunPay page" });
   });
 
+  it("returns 503 when FUNPAY_API_URL is not configured", async () => {
+    delete process.env.FUNPAY_API_URL;
+
+    const response = await POST(jsonRequest({ query: "chatgpt", forbidden_words: [] }));
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({ error: "FUNPAY_API_URL is not configured" });
+  });
+
+  it("returns 504 when the upstream request times out", async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(
+      new DOMException("The operation was aborted", "AbortError")
+    ) as unknown as typeof fetch;
+
+    const response = await POST(jsonRequest({ query: "chatgpt", forbidden_words: [] }));
+
+    expect(response.status).toBe(504);
+    await expect(response.json()).resolves.toEqual({ error: "FunPay lot search timed out" });
+  });
+
   it("treats zero max price as no max price filter", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(
       Response.json({ count: 0, results: [] })

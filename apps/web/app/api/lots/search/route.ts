@@ -3,6 +3,7 @@ import { z } from "zod";
 import { withApiErrors } from "@/lib/api";
 import { requireUserApi } from "@/lib/auth";
 import { query } from "@/lib/db";
+import { fetchWithTimeout, FUNPAY_SEARCH_TIMEOUT_MS, UpstreamTimeoutError } from "@/lib/fetch-timeout";
 
 const schema = z.object({
   query: z.string().default(""),
@@ -35,6 +36,10 @@ export const POST = withApiErrors(async (request: Request) => {
     return NextResponse.json({ error: "Invalid search payload" }, { status: 400 });
   }
 
+  if (!process.env.FUNPAY_API_URL) {
+    return NextResponse.json({ error: "FUNPAY_API_URL is not configured" }, { status: 503 });
+  }
+
   const dbWords = await query<{ word: string }>("SELECT word FROM forbidden_words");
   const mergedForbidden = [
     ...new Set([
@@ -43,12 +48,24 @@ export const POST = withApiErrors(async (request: Request) => {
     ]),
   ];
 
-  const response = await fetch(`${process.env.FUNPAY_API_URL}/lots/search`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ ...parsed.data, forbidden_words: mergedForbidden }),
-    cache: "no-store"
-  });
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(
+      `${process.env.FUNPAY_API_URL}/lots/search`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...parsed.data, forbidden_words: mergedForbidden }),
+        cache: "no-store"
+      },
+      FUNPAY_SEARCH_TIMEOUT_MS
+    );
+  } catch (error) {
+    if (error instanceof UpstreamTimeoutError) {
+      return NextResponse.json({ error: "FunPay lot search timed out" }, { status: 504 });
+    }
+    throw error;
+  }
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     const status = response.status === 504 ? 504 : 502;

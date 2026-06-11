@@ -15,6 +15,9 @@ function parseTimeoutMs(value: string | undefined, fallback: number) {
 
 export const FUNPAY_API_TIMEOUT_MS = parseTimeoutMs(process.env.FUNPAY_API_TIMEOUT_MS, 15_000);
 export const TELEGRAM_API_TIMEOUT_MS = parseTimeoutMs(process.env.TELEGRAM_API_TIMEOUT_MS, 10_000);
+// Search scrapes FunPay live and retries on the funpay-api side (up to 3x20s),
+// so it needs a noticeably larger budget than ordinary API calls.
+export const FUNPAY_SEARCH_TIMEOUT_MS = parseTimeoutMs(process.env.FUNPAY_SEARCH_TIMEOUT_MS, 70_000);
 
 function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === "AbortError";
