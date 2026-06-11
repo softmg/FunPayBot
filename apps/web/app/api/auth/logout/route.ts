@@ -2,9 +2,10 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { sessionCookie } from "@/lib/auth";
 
-export async function POST() {
+export async function POST(request: Request) {
   const cookieStore = await cookies();
   cookieStore.delete(sessionCookie);
-  return NextResponse.redirect(new URL("/login", process.env.NEXTAUTH_URL ?? "http://localhost:3000"));
+  // 303 so the browser issues a GET to /login instead of replaying the POST.
+  return NextResponse.redirect(new URL("/login", request.url), 303);
 }
 
