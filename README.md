@@ -56,7 +56,18 @@ FUNPAY_USER_AGENT=...
 
 TELEGRAM_BOT_TOKEN=...
 ADMIN_TELEGRAM_IDS=123456789
+
+# Общий секрет для запросов web/telegram-bot -> funpay-api
+INTERNAL_API_TOKEN=replace-with-random-token
 ```
+
+Сгенерировать надежный секрет (32 байта в hex):
+
+```powershell
+-join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Maximum 256) })
+```
+
+или через `openssl rand -hex 32` (Linux/macOS).
 
 3. Запустите сервисы:
 
