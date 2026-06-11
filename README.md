@@ -1,92 +1,168 @@
-# FunPayBot Procurement Automation
+# FunPay Automation MVP
 
-Self-hosted procurement automation for FunPay account purchasing.
+MVP сервиса для автоматизации закупки аккаунтов на FunPay: поиск лотов, создание покупки, получение платежных реквизитов в Telegram, переписка с продавцом и сохранение полученных реквизитов аккаунта.
 
-## Services
+Проект собран как self-hosted система из web-панели, FastAPI-адаптера к FunPay, Telegram-бота и Postgres.
 
-- `apps/web` — Next.js admin and manager panel (auth, lot search, accounts DB, admin settings).
-- `services/funpay-api` — FastAPI service that centralizes FunPay parsing, chat, purchase actions, and throttling.
-- `services/telegram-bot` — Telegram worker for manager/admin live workflows (seller chat relay, credential confirmation).
-- `packages/db` — SQL migrations for Postgres.
+## Что реализовано
 
-## Quick Start
+- Поиск лотов в категории FunPay с фильтрами по запросу, цене, отзывам и запрещенным словам.
+- Просмотр гарантии по лоту.
+- Выбор способа оплаты и создание заказа через FunPay.
+- Передача платежной ссылки или crypto-реквизитов администраторам в Telegram.
+- Telegram-бот для рабочих сценариев менеджера:
+  - получение уведомлений по платежу;
+  - отправка сообщений продавцу;
+  - просмотр назначенных чатов;
+  - подтверждение найденных реквизитов аккаунта.
+- Админ-панель:
+  - bootstrap первого администратора;
+  - управление пользователями и Telegram ID;
+  - управление запрещенными словами;
+  - системные настройки.
+- База аккаунтов с изменением статуса и сценарием обращения к продавцу по проблемному аккаунту.
+- Аудит ключевых действий в Postgres.
 
-1. Copy `.env.example` to `.env` and fill the secrets.
-2. Run:
+## Сервисы
+
+- `apps/web` - Next.js web-панель для администратора и менеджеров.
+- `services/funpay-api` - FastAPI-сервис для работы с FunPay: поиск, чаты, заказы, возвраты.
+- `services/telegram-bot` - Telegram worker для уведомлений, переписки и подтверждения реквизитов.
+- `packages/db` - SQL-миграции Postgres.
+
+## Требования
+
+- Docker и Docker Compose.
+- Telegram bot token.
+- FunPay `golden_key` от аккаунта, с которого выполняются действия.
+
+## Быстрый запуск
+
+1. Скопируйте пример окружения:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+2. Заполните `.env`:
+
+```dotenv
+NEXTAUTH_SECRET=replace-with-random-secret
+BOOTSTRAP_ADMIN_EMAIL=admin@example.com
+BOOTSTRAP_ADMIN_PASSWORD=change-me
+
+FUNPAY_GOLDEN_KEY=...
+FUNPAY_USER_AGENT=...
+
+TELEGRAM_BOT_TOKEN=...
+ADMIN_TELEGRAM_IDS=123456789
+```
+
+3. Запустите сервисы:
 
 ```powershell
 docker compose up --build
 ```
 
-3. Open `http://localhost:3000`.
-4. Login with `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD` (auto-creates admin on first login).
+4. Откройте web-панель:
 
-## Architecture
-
-```
-┌──────────┐     ┌──────────────┐     ┌──────────┐
-│  web     │────▶│  funpay-api  │◀────│ telegram │
-│ (Next.js)│     │  (FastAPI)   │     │   bot    │
-└────┬─────┘     └──────┬───────┘     └────┬─────┘
-     │                  │                  │
-     └──────────┬───────┘──────────────────┘
-                │
-          ┌─────▼─────┐
-          │ Postgres  │
-          └───────────┘
+```text
+http://localhost:3000
 ```
 
-## Web Panel Features
+5. Войдите через `BOOTSTRAP_ADMIN_EMAIL` и `BOOTSTRAP_ADMIN_PASSWORD`. Первый администратор создается автоматически при первом входе.
 
-- **Auth**: HMAC-signed session cookies, admin/manager roles, Next.js middleware protection.
-- **Lot Search**: Query FunPay lots/1355/ by keyword, price, reviews, forbidden words. DB forbidden words are auto-merged.
-- **Accounts DB**: Interactive table with status management (active/blocked/replacement_requested/refunded), contact-seller flow for problem accounts.
-- **Admin Panel**: User CRUD (create managers, toggle active, set Telegram IDs), forbidden words management, system settings (FunPay keys, Telegram token).
+## Переменные окружения
 
-## Telegram Bot Commands
+Полный список находится в `.env.example`.
 
-- `/start` — Show available commands.
-- `/send <chat_id> <message>` — Send message to a FunPay seller.
-- `/chats` — List your assigned FunPay chats.
-- `/assign <chat_id> <telegram_id>` — Assign a chat to a manager (admin only).
-- Credential auto-detection: paste `login:password` and confirm via inline button.
+Основные переменные:
 
-The bot runs a background poller that fetches new seller messages from FunPay and relays them to the assigned manager on Telegram (configurable interval via `FUNPAY_POLL_INTERVAL_SECONDS`).
+- `DATABASE_URL` - подключение к Postgres.
+- `NEXTAUTH_SECRET` - секрет для подписи session cookie.
+- `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD` - учетные данные первого администратора.
+- `FUNPAY_GOLDEN_KEY` - FunPay session key.
+- `FUNPAY_USER_AGENT` - User-Agent браузера, связанный с FunPay-сессией.
+- `FUNPAY_BASE_URL` - базовый URL FunPay, по умолчанию `https://funpay.com`.
+- `FUNPAY_CATEGORY_PATH` - категория поиска, по умолчанию `lots/1355/`.
+- `FUNPAY_MAX_ACTIONS_PER_MINUTE` - лимит действий к FunPay.
+- `TELEGRAM_BOT_TOKEN` - токен Telegram-бота.
+- `ADMIN_TELEGRAM_IDS` - список Telegram ID администраторов через запятую.
+- `FUNPAY_POLL_INTERVAL_SECONDS` - интервал опроса сообщений FunPay.
+- `FUNPAY_API_URL` - внутренний URL FastAPI-сервиса.
 
-## FunPayAPI Integration
+Не коммитьте реальный `.env`: в нем находятся токены, cookie/session keys и другие секреты.
 
-`services/funpay-api` vendors the `FunPayAPI` package from `sidor0912/FunPayCardinal` at commit `8b52a855f242da854806ef09ab1691b53d5d20a9`.
+## Основной сценарий
 
-Implemented FunPay-backed endpoints:
+1. Администратор заходит в web-панель.
+2. Ищет подходящий лот FunPay.
+3. Открывает покупку и выбирает доступный способ оплаты.
+4. Система создает заказ через FunPay и отправляет платежную ссылку или реквизиты в Telegram.
+5. Менеджер оплачивает заказ и общается с продавцом через Telegram-бота.
+6. Когда продавец присылает данные аккаунта, бот распознает формат `login:password` и предлагает подтвердить сохранение.
+7. Подтвержденные реквизиты появляются в базе аккаунтов web-панели.
+
+Этот сценарий был проверен вручную end-to-end: покупка создается, платежные реквизиты приходят в Telegram, сообщение продавцу отправляется.
+
+## Telegram-команды
+
+- `/start` - список доступных команд.
+- `/send <chat_id> <message>` - отправить сообщение продавцу в FunPay.
+- `/chats` - показать назначенные менеджеру чаты.
+- `/assign <chat_id> <telegram_user_id>` - назначить чат менеджеру, доступно администратору.
+
+Также бот обрабатывает сообщения с реквизитами аккаунта и предлагает сохранить их через inline-подтверждение.
+
+## API FunPay-сервиса
+
+Основные endpoints:
 
 - `GET /health`
 - `GET /session`
 - `POST /session/refresh`
+- `POST /lots/search`
+- `GET /lots/search/stream`
+- `GET /lots/warranty`
 - `GET /chats`
+- `GET /chats/messages`
 - `GET /chats/{chat_id}`
 - `GET /chats/{chat_id}/history`
 - `POST /chats/send`
-- `POST /lots/search`
-- `GET /lots/search/stream` (SSE)
-- `GET /lots/warranty`
+- `POST /orders/payment-methods`
+- `POST /orders`
 - `GET /orders/{order_id}`
 - `POST /orders/{order_id}/refund`
 
-`POST /orders` intentionally returns `501` until the buyer-side purchase/payment-link flow is verified against a live FunPay account.
+`services/funpay-api` использует vendored `FunPayAPI` из `sidor0912/FunPayCardinal` на commit `8b52a855f242da854806ef09ab1691b53d5d20a9`.
 
-## Testing
+## Проверки
+
+Python-сервисы:
 
 ```powershell
-# funpay-api
-cd services/funpay-api; python -m pytest tests/ -v
+cd services/funpay-api
+python -m ruff check .
+python -m pytest tests/ -v
 
-# telegram-bot
-cd services/telegram-bot; python -m pytest tests/ -v
-
-# web typecheck
-cd apps/web; npm run typecheck
+cd ../telegram-bot
+python -m ruff check .
+python -m pytest tests/ -v
 ```
 
-## Configuration
+Web:
 
-All configurable values are in `.env` — see `.env.example` for the full list. Admin can also manage settings via the web panel at `/admin`.
+```powershell
+cd apps/web
+npm install
+npm run typecheck
+npm test
+```
+
+## Известные ограничения
+
+- Это MVP тестового задания, а не полностью отполированный production-продукт.
+- Основной happy path проверен вручную, но покрытие edge cases FunPay и платежных провайдеров нужно расширять.
+- UX/UI web-панели требует дальнейшей полировки.
+- Сценарии ошибок оплаты, изменения HTML FunPay и нестабильности внешних сервисов требуют дополнительного hardening.
+- Для production-эксплуатации нужны более строгая observability, алерты, backup/restore и полноценный секрет-менеджмент.
