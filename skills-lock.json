@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "skills": {
+    "fastapi-python": {
+      "source": "mindrally/skills",
+      "sourceType": "github",
+      "skillPath": "fastapi-python/SKILL.md",
+      "computedHash": "29c6ca5e2bbfb51d40f0fb0afd998b13e23234e1f88c790b6e6a435c7eac55de"
+    },
+    "next-best-practices": {
+      "source": "vercel-labs/next-skills",
+      "sourceType": "github",
+      "skillPath": "next-best-practices/SKILL.md",
+      "computedHash": "c78f952d4e98bf3694856dbf70c03a6037d4e258ff3701f2642bfdf108549a25"
+    },
+    "supabase-postgres-best-practices": {
+      "source": "supabase/agent-skills",
+      "sourceType": "github",
+      "skillPath": "supabase-postgres-best-practices/SKILL.md",
+      "computedHash": "be9a8dcecb83376f38ef92aad6ae78f28a23865501aba941fdce213b58f00996"
+    },
+    "vercel-react-best-practices": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "vercel-react-best-practices/SKILL.md",
+      "computedHash": "71ed7794962fa6e803ee83030517b5b93a9f70fbfeb431ec4535c5480a8d8355"
+    },
+    "webapp-testing": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "webapp-testing/SKILL.md",
+      "computedHash": "8bc27790f6e6dfc2bfa6692326d4518baacf6a31dcc646d963c729adad2f7e34"
+    }
+  }
+}
