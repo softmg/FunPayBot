@@ -14,16 +14,23 @@ Usage:
       -- python test.py
 """
 
-import subprocess
-import socket
-import time
-import sys
 import argparse
+import socket
+import subprocess
+import sys
+import time
 
-def is_server_ready(port, timeout=30):
+
+def wait_for_server_ready(process, port, timeout=30):
     """Wait for server to be ready by polling the port."""
     start_time = time.time()
     while time.time() - start_time < timeout:
+        return_code = process.poll()
+        if return_code is not None:
+            raise RuntimeError(
+                f"Server process exited with code {return_code} before port {port} was ready"
+            )
+
         try:
             with socket.create_connection(('localhost', port), timeout=1):
                 return True
@@ -68,15 +75,13 @@ def main():
             # Use shell=True to support commands with cd and &&
             process = subprocess.Popen(
                 server['cmd'],
-                shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
+                shell=True
             )
             server_processes.append(process)
 
             # Wait for this server to be ready
             print(f"Waiting for server on port {server['port']}...")
-            if not is_server_ready(server['port'], timeout=args.timeout):
+            if not wait_for_server_ready(process, server['port'], timeout=args.timeout):
                 raise RuntimeError(f"Server failed to start on port {server['port']} within {args.timeout}s")
 
             print(f"Server ready on port {server['port']}")

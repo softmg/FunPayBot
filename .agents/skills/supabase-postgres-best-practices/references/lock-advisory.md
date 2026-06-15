@@ -27,27 +27,29 @@ select * from resource_locks where resource_name = 'report_generator' for update
 
 ```sql
 -- Session-level advisory lock (released on disconnect or unlock)
-select pg_advisory_lock(hashtext('report_generator'));
+select pg_advisory_lock(42, 1);  -- namespace 42, resource 1
 -- ... do exclusive work ...
-select pg_advisory_unlock(hashtext('report_generator'));
+select pg_advisory_unlock(42, 1);
 
 -- Transaction-level lock (released on commit/rollback)
 begin;
-select pg_advisory_xact_lock(hashtext('daily_report'));
+select pg_advisory_xact_lock(42, 2);  -- namespace 42, resource 2
 -- ... do work ...
 commit;  -- Lock automatically released
 ```
+
+Use deterministic integer namespaces and resource IDs instead of hashing lock names. Hash-based 32-bit keys can collide and make unrelated resources share a lock.
 
 Try-lock for non-blocking operations:
 
 ```sql
 -- Returns immediately with true/false instead of waiting
-select pg_try_advisory_lock(hashtext('resource_name'));
+select pg_try_advisory_lock(42, 3);
 
 -- Use in application
 if (acquired) {
   -- Do work
-  select pg_advisory_unlock(hashtext('resource_name'));
+  select pg_advisory_unlock(42, 3);
 } else {
   -- Skip or retry later
 }

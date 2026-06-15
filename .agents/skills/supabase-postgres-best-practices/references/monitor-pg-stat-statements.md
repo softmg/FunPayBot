@@ -38,7 +38,8 @@ from pg_stat_statements
 order by calls desc
 limit 10;
 
--- Reset statistics after optimization
+-- Reset statistics after optimization only when intentionally rebaselining;
+-- this clears pg_stat_statements history.
 select pg_stat_statements_reset();
 ```
 

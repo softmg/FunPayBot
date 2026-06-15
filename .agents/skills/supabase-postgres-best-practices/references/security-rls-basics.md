@@ -28,7 +28,7 @@ alter table orders enable row level security;
 -- Create policy for users to see only their orders
 create policy orders_user_policy on orders
   for all
-  using (user_id = current_setting('app.current_user_id')::bigint);
+  using (user_id = current_setting('app.current_user_id', true)::bigint);
 
 -- Force RLS even for table owners
 alter table orders force row level security;

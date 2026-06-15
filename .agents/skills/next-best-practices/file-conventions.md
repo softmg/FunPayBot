@@ -6,7 +6,7 @@ Next.js App Router uses file-based routing with special file conventions.
 
 Reference: https://nextjs.org/docs/app/getting-started/project-structure
 
-```
+```plaintext
 app/
 ├── layout.tsx          # Root layout (required)
 ├── page.tsx            # Home page (/)
@@ -40,7 +40,7 @@ app/
 
 ## Route Segments
 
-```
+```plaintext
 app/
 ├── blog/               # Static segment: /blog
 ├── [slug]/             # Dynamic segment: /:slug
@@ -51,7 +51,7 @@ app/
 
 ## Parallel Routes
 
-```
+```plaintext
 app/
 ├── @analytics/
 │   └── page.tsx
@@ -62,7 +62,7 @@ app/
 
 ## Intercepting Routes
 
-```
+```plaintext
 app/
 ├── feed/
 │   └── page.tsx
@@ -81,7 +81,7 @@ Conventions:
 
 ## Private Folders
 
-```
+```plaintext
 app/
 ├── _components/        # Private folder (not a route)
 │   └── Button.tsx

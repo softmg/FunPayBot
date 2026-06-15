@@ -35,7 +35,7 @@ alter system set idle_session_timeout = '10min';
 select pg_reload_conf();
 ```
 
-For pooled connections, configure at the pooler level:
+Avoid server-side `idle_session_timeout` behind transaction or session poolers unless you have verified pooler behavior; it can close pooled server connections unexpectedly. For pooled connections, configure at the pooler level:
 
 ```ini
 # pgbouncer.ini

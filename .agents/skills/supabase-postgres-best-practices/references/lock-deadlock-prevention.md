@@ -39,10 +39,11 @@ update accounts set balance = balance + 100 where id = 2;
 commit;
 ```
 
-Alternative: use a single statement to update atomically:
+Alternative: use a single statement to reduce deadlock risk:
 
 ```sql
--- Single statement acquires all locks atomically
+-- A single UPDATE is atomic, but row locks are still acquired during execution.
+-- Use a consistent predicate/order to reduce deadlock risk with overlapping rows.
 begin;
 update accounts
 set balance = balance + case id

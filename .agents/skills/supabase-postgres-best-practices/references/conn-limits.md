@@ -29,10 +29,12 @@ show max_connections;  -- 500 (way too high for 4GB RAM)
 
 -- Recommended settings for 4GB RAM
 alter system set max_connections = 100;
+-- max_connections requires a PostgreSQL restart to take effect
 
 -- Also set work_mem appropriately
 -- work_mem * max_connections should not exceed 25% of RAM
 alter system set work_mem = '8MB';  -- 8MB * 100 = 800MB max
+select pg_reload_conf();  -- reloads work_mem, but not max_connections
 ```
 
 Monitor connection usage:

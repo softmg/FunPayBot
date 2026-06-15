@@ -5,6 +5,10 @@ import os
 
 html_file_path = os.path.abspath('path/to/your/file.html')
 file_url = f'file://{html_file_path}'
+output_dir = os.environ.get('OUTPUT_DIR', 'outputs')
+os.makedirs(output_dir, exist_ok=True)
+screenshot_path = os.path.join(output_dir, 'static_page.png')
+after_submit_path = os.path.join(output_dir, 'after_submit.png')
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
@@ -14,7 +18,7 @@ with sync_playwright() as p:
     page.goto(file_url)
 
     # Take screenshot
-    page.screenshot(path='/mnt/user-data/outputs/static_page.png', full_page=True)
+    page.screenshot(path=screenshot_path, full_page=True)
 
     # Interact with elements
     page.click('text=Click Me')
@@ -26,7 +30,7 @@ with sync_playwright() as p:
     page.wait_for_timeout(500)
 
     # Take final screenshot
-    page.screenshot(path='/mnt/user-data/outputs/after_submit.png', full_page=True)
+    page.screenshot(path=after_submit_path, full_page=True)
 
     browser.close()
 

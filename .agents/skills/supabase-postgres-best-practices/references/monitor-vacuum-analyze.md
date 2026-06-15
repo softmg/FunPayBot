@@ -7,7 +7,7 @@ tags: vacuum, analyze, statistics, maintenance, autovacuum
 
 ## Maintain Table Statistics with VACUUM and ANALYZE
 
-Outdated statistics cause the query planner to make poor decisions. VACUUM reclaims space, ANALYZE updates statistics.
+Outdated statistics cause the query planner to make poor decisions. VACUUM marks dead tuple space reusable inside the table, while ANALYZE updates statistics. Regular VACUUM does not usually return space to the operating system.
 
 **Incorrect (stale statistics):**
 

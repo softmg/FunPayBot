@@ -77,6 +77,6 @@ function ThemeWrapper({ children }: { children: ReactNode }) {
 }
 ```
 
-The inline script executes synchronously before showing the element, ensuring the DOM already has the correct value. No flickering, no hydration mismatch.
+The inline script executes synchronously before showing the element, ensuring the DOM already has the correct value. No flickering, no hydration mismatch. If your app uses a strict Content Security Policy, attach the framework-provided nonce or use an external/bootstrap script that satisfies the policy.
 
 This pattern is especially useful for theme toggles, user preferences, authentication states, and any client-only data that should render immediately without flashing default values.

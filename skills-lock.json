@@ -5,31 +5,31 @@
       "source": "mindrally/skills",
       "sourceType": "github",
       "skillPath": "fastapi-python/SKILL.md",
-      "computedHash": "4521c6090735152b7b8df670cefe5c1c6d1dcaa115de67bb96e74ebf802d4f24"
+      "computedHash": "29c6ca5e2bbfb51d40f0fb0afd998b13e23234e1f88c790b6e6a435c7eac55de"
     },
     "next-best-practices": {
       "source": "vercel-labs/next-skills",
       "sourceType": "github",
-      "skillPath": "skills/next-best-practices/SKILL.md",
-      "computedHash": "f4678aef4ffc10a5ea64a91e57abe5a5081af813b06d58d565caf3e8ef56e26c"
+      "skillPath": "next-best-practices/SKILL.md",
+      "computedHash": "c78f952d4e98bf3694856dbf70c03a6037d4e258ff3701f2642bfdf108549a25"
     },
     "supabase-postgres-best-practices": {
       "source": "supabase/agent-skills",
       "sourceType": "github",
-      "skillPath": "skills/supabase-postgres-best-practices/SKILL.md",
-      "computedHash": "3639bed1f40b3fbadae79fee631c42c89b2d1f5c30b05d5aa3cca06422a6bbbc"
+      "skillPath": "supabase-postgres-best-practices/SKILL.md",
+      "computedHash": "be9a8dcecb83376f38ef92aad6ae78f28a23865501aba941fdce213b58f00996"
     },
     "vercel-react-best-practices": {
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",
-      "skillPath": "skills/react-best-practices/SKILL.md",
-      "computedHash": "ca7b0c0c6e5f2750043f7f0cd72d16ac4e2abc48f9b5500d047a4b77a2506212"
+      "skillPath": "vercel-react-best-practices/SKILL.md",
+      "computedHash": "71ed7794962fa6e803ee83030517b5b93a9f70fbfeb431ec4535c5480a8d8355"
     },
     "webapp-testing": {
       "source": "anthropics/skills",
       "sourceType": "github",
-      "skillPath": "skills/webapp-testing/SKILL.md",
-      "computedHash": "3f14af7f5690695209c22fbf8c8d133769a86d64892602c09bb13f135e14e857"
+      "skillPath": "webapp-testing/SKILL.md",
+      "computedHash": "8bc27790f6e6dfc2bfa6692326d4518baacf6a31dcc646d963c729adad2f7e34"
     }
   }
 }

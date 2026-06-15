@@ -57,7 +57,7 @@ Server Actions are the recommended way to handle mutations.
 // app/actions.ts
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 
 export async function createPost(formData: FormData) {
   const title = formData.get('title') as string;

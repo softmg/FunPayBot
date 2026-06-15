@@ -36,7 +36,7 @@ function setLocalStorage(key: string, value: string) {
 }
 ```
 
-Use a Map (not a hook) so it works everywhere: utilities, event handlers, not just React components.
+Use a Map (not a hook) for client-side utilities and event handlers, not just React components. Do not reuse this pattern for request-specific server data; module-level caches can be shared across users in server runtimes.
 
 **Cookie caching:**
 

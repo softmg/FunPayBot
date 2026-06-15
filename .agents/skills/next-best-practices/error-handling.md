@@ -93,14 +93,14 @@ async function createPost(formData: FormData) {
 }
 
 // Good: Re-throw navigation errors
+import { unstable_rethrow } from 'next/navigation'
+
 async function createPost(formData: FormData) {
   try {
     const post = await db.post.create({ ... })
     redirect(`/posts/${post.id}`)
   } catch (error) {
-    if (error instanceof Error && error.message === 'NEXT_REDIRECT') {
-      throw error  // Re-throw navigation errors
-    }
+    unstable_rethrow(error)  // Re-throw navigation errors
     return { error: 'Failed to create post' }
   }
 }

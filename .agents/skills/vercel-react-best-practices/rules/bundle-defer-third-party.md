@@ -26,9 +26,11 @@ export default function RootLayout({ children }) {
 }
 ```
 
-**Correct (loads after hydration):**
+**Correct (loads after hydration inside a Client Component):**
 
 ```tsx
+'use client'
+
 import dynamic from 'next/dynamic'
 
 const Analytics = dynamic(
@@ -36,12 +38,20 @@ const Analytics = dynamic(
   { ssr: false }
 )
 
+export function DeferredAnalytics() {
+  return <Analytics />
+}
+```
+
+```tsx
+import { DeferredAnalytics } from './deferred-analytics'
+
 export default function RootLayout({ children }) {
   return (
     <html>
       <body>
         {children}
-        <Analytics />
+        <DeferredAnalytics />
       </body>
     </html>
   )

@@ -7,7 +7,7 @@ tags: initialization, useEffect, app-startup, side-effects
 
 ## Initialize App Once, Not Per Mount
 
-Do not put app-wide initialization that must run once per app load inside `useEffect([])` of a component. Components can remount and effects will re-run. Use a module-level guard or top-level init in the entry module instead.
+Do not put app-wide initialization that must run once per app load inside `useEffect([])` of a component. Components can remount and effects will re-run. For browser-only initialization, use a client-side module-level guard or top-level init in the entry module instead. Avoid module-level request state in Server Components, Route Handlers, or other server runtimes where modules are shared across requests.
 
 **Incorrect (runs twice in dev, re-runs on remount):**
 
@@ -22,7 +22,7 @@ function Comp() {
 }
 ```
 
-**Correct (once per app load):**
+**Correct (once per browser app load):**
 
 ```tsx
 let didInit = false
